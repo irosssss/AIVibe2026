@@ -1,181 +1,125 @@
 // AIVibe/Core/AI/Providers/CoreMLProvider.swift
 // Модуль: Core/AI
-// Оффлайн-провайдер на основе Core ML модели (Triplex fallback).
-// Модель загружается lazy при первом обращении.
-// Поддерживает только базовые запросы: стиль интерьера, палитры, советы.
+// Оффлайн-провайдер на основе template matching.
+//
+// ⚠️ TODO: заменить на реальную CoreML модель когда будет .mlmodel файл
+//
+// Реализует AIProviderProtocol, Sendable.
+// Не требует интернета — работает полностью оффлайн.
 
 import Foundation
-import CoreML
-import Logging
 
-// MARK: - CoreML Model Protocol
-
-/// Протокол оберхи ML-модели для тестируемости.
-public protocol CoreMLModelProviding: Sendable {
-    func predict(input: String, maxTokens: Int) async throws -> String
-}
-
-// MARK: - CoreMLProvider
-
-/// Оффлайн AI-провайдер через Core ML.
+/// Оффлайн AI-провайдер.
+/// Использует словарь шаблонных ответов по ключевым словам интерьера.
 /// Все ответы помечаются isOffline: true.
-public actor CoreMLProvider: AIProviderProtocol {
-
-    // MARK: - Конфигурация
-
-    public struct Configuration: Sendable {
-        /// Имя .mlmodelc файла в Bundle
-        let modelFileName: String
-        /// Максимальная длина промпта для локальной модели
-        let maxInputLength: Int
-
-        public init(
-            modelFileName: String = "AIVibeOffline",
-            maxInputLength: Int   = 512
-        ) {
-            self.modelFileName = modelFileName
-            self.maxInputLength = maxInputLength
-        }
-    }
+public final class CoreMLProvider: AIProviderProtocol, Sendable {
 
     // MARK: - Properties
 
-    nonisolated public let name = "CoreML (Оффлайн)"
+    nonisolated public let name = "CoreML-Offline"
 
-    private let config: Configuration
-    private let logger = Logger(label: "ai.coreml")
+    /// Всегда доступен (не требует сети или загрузки модели).
+    nonisolated public var isAvailable: Bool { true }
 
-    /// Lazy-загруженная модель. nil — ещё не загружена или не доступна.
-    private var model: (any CoreMLModelProviding)?
-    private var isModelLoaded = false
-    private var modelLoadError: AIError?
+    /// Шаблонные ответы по ключевым словам.
+    private let templateResponses: [String: String] = [
+        "диван":
+            "Для гостиной подойдёт угловой диван с обивкой из микрофибры. "
+            + "Он визуально расширяет пространство и добавляет зону для отдыха. "
+            + "Рекомендуемые цвета: бежевый, серый или тёмно-синий.",
 
-    // MARK: - Init
+        "цвет":
+            "Для скандинавского стиля используйте белый, серый, бежевый "
+            + "с акцентами пастельных тонов. Для лофта — кирпичный, "
+            + "чёрный и металлик. Для минимализма — монохромную палитру.",
 
-    public init(config: Configuration = .init()) {
-        self.config = config
-    }
+        "освещение":
+            "Многоуровневое освещение: основной свет (люстра) + торшеры "
+            + "для зоны отдыха + точечные светильники для рабочих зон. "
+            + "Тёплый свет 2700–3000K создаёт уют, холодный 4000K — для кухни.",
+
+        "стиль":
+            "Определите стиль: минимализм (чистые линии, монохром), "
+            + "скандинавский (светлые тона, дерево, уют), "
+            + "лофт (кирпич, металл, открытые коммуникации) "
+            + "или классика (симметрия, лепнина, натуральные материалы).",
+
+        "кухня":
+            "Для кухни выбирайте влагостойкие материалы: керамогранит, "
+            + "кварцевый агломерат для столешниц, фасады с лаковым покрытием. "
+            + "Рабочий треугольник «плита-мойка-холодильник» не должен превышать 6 м.",
+
+        "спальня":
+            "В спальне важен комфорт и приглушённый свет. "
+            + "Используйте плотные шторы блэкаут, кровать с ортопедическим "
+            + "основанием, натуральное постельное бельё. Цвета: пастельные, "
+            + "природные оттенки.",
+
+        "ванная":
+            "Для ванной выбирайте керамическую плитку с коэффициентом "
+            + "противоскольжения не менее R10. Влагостойкая краска, "
+            + "встроенная мебель из МДФ с защитой от пара.",
+
+        "декор":
+            "Декор создаёт настроение: живые растения, постеры, "
+            + "текстиль (подушки, пледы), ароматические свечи. "
+            + "Правило трёх цветов: 60% основы, 30% дополнительного, 10% акцентов.",
+
+        "планировка":
+            "Открытая планировка объединяет гостиную, кухню и столовую. "
+            + "Зонируйте пространство ковром, разным освещением или "
+            + "лёгкими перегородками. Для маленьких комнат — многофункциональная мебель.",
+    ]
 
     // MARK: - AIProviderProtocol
 
-    public var isAvailable: Bool {
-        get async {
-            // Доступен если модель загружена или можно попробовать загрузить
-            if isModelLoaded { return model != nil }
-            await loadModelIfNeeded()
-            return model != nil
-        }
-    }
-
     public func complete(prompt: AIPrompt) async throws -> AIResponse {
-        await loadModelIfNeeded()
+        let inputText = buildInput(from: prompt).lowercased()
 
-        guard let loadedModel = model else {
-            throw modelLoadError ?? AIError.modelLoadingFailed(config.modelFileName)
+        // Ищем первое подходящее ключевое слово
+        for (keyword, response) in templateResponses {
+            if inputText.contains(keyword) {
+                return AIResponse(
+                    text: response,
+                    providerName: name,
+                    isOffline: true,
+                    tokensUsed: 0
+                )
+            }
         }
 
-        // Ограничиваем длину для локальной модели
-        let inputText = buildInput(from: prompt)
-        let truncated = String(inputText.prefix(config.maxInputLength))
-
-        logger.info("CoreML обрабатывает запрос (\(truncated.count) символов)")
-
-        let result = try await loadedModel.predict(
-            input: truncated,
-            maxTokens: min(prompt.maxTokens, 256) // Локальная модель — меньший лимит
-        )
+        // Если ничего не найдено — базовый ответ об интерьере
+        let fallback = """
+            Здравствуйте! Я оффлайн-помощник по интерьеру. \
+            Я могу дать советы по стилю, цветам, освещению, расстановке мебели \
+            и декорированию. Подскажите, какой аспект интерьера вас интересует?
+            """
 
         return AIResponse(
-            text: result,
+            text: fallback,
             providerName: name,
             isOffline: true,
-            tokensUsed: 0 // Core ML не считает токены
+            tokensUsed: 0
         )
     }
 
     public func analyzeImage(_ imageData: Data, prompt: String) async throws -> AIResponse {
-        // Core ML Vision pipeline — заглушка для будущей реализации
-        throw AIError.providerUnavailable(
-            provider: "\(name): analyzeImage в разработке"
+        // Анализ изображений недоступен в оффлайн-режиме
+        AIResponse(
+            text: "Анализ изображений недоступен в оффлайн-режиме. "
+                + "Подключитесь к интернету для использования vision-возможностей.",
+            providerName: name,
+            isOffline: true,
+            tokensUsed: 0
         )
     }
 
     // MARK: - Private
 
-    /// Загружает модель из Bundle асинхронно (lazy, только один раз).
-    private func loadModelIfNeeded() async {
-        guard !isModelLoaded else { return }
-        isModelLoaded = true // Устанавливаем флаг до загрузки чтобы избежать двойной загрузки
-
-        do {
-            guard let modelURL = Bundle.main.url(
-                forResource: config.modelFileName,
-                withExtension: "mlmodelc"
-            ) else {
-                logger.warning("CoreML модель '\(config.modelFileName).mlmodelc' не найдена в Bundle")
-                modelLoadError = .modelLoadingFailed(
-                    "\(config.modelFileName).mlmodelc не найден в Bundle"
-                )
-                return
-            }
-
-            // iOS 18: MLModel.load(contentsOf:configuration:) — async нативно
-            let mlConfig = MLModelConfiguration()
-            mlConfig.computeUnits = .cpuAndNeuralEngine // Используем Neural Engine на Apple Silicon
-            let loadedMLModel = try await MLModel.load(contentsOf: modelURL, configuration: mlConfig)
-
-            model = AIVibeMLModelWrapper(mlModel: loadedMLModel)
-            logger.info("CoreML модель '\(config.modelFileName)' загружена успешно")
-        } catch {
-            logger.error("CoreML не удалось загрузить модель: \(error)")
-            modelLoadError = .modelLoadingFailed(error.localizedDescription)
-        }
-    }
-
     /// Собирает текстовый промпт из структурированного AIPrompt.
     private func buildInput(from prompt: AIPrompt) -> String {
         prompt.messages
-            .filter { $0.role != .system }
             .map { "\($0.role.rawValue): \($0.content)" }
             .joined(separator: "\n")
-    }
-}
-
-// MARK: - MLModel Wrapper
-
-/// Обёртка над MLModel для реализации протокола CoreMLModelProviding.
-/// `MLModel` thread-safe (iOS 18+), поэтому Sendable без @unchecked.
-private struct AIVibeMLModelWrapper: CoreMLModelProviding, Sendable {
-    private let mlModel: MLModel
-
-    init(mlModel: MLModel) {
-        self.mlModel = mlModel
-    }
-
-    func predict(input: String, maxTokens: Int) async throws -> String {
-        // Универсальная реализация через MLFeatureProvider
-        // Конкретные ключи зависят от используемой модели
-        let inputFeatures = try MLDictionaryFeatureProvider(dictionary: [
-            "input_text": MLFeatureValue(string: input)
-        ])
-
-        let output = try mlModel.prediction(from: inputFeatures)
-
-        // Извлекаем текстовый выход — ключ зависит от модели
-        if let text = output.featureValue(for: "output_text")?.stringValue {
-            return text
-        }
-
-        // Fallback: первый строковый feature
-        for featureName in output.featureNames {
-            if let text = output.featureValue(for: featureName)?.stringValue {
-                return text
-            }
-        }
-
-        throw AIError.invalidResponse(
-            provider: "CoreML",
-            details: "Модель не вернула текстовый output"
-        )
     }
 }
