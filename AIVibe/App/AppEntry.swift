@@ -1,20 +1,90 @@
-// AIVibe
-// Module: App
-// Entry point. iOS 18 / Swift 6 App Lifecycle.
+// AIVibe/App/AppEntry.swift
+// Модуль: App
+// Точка входа приложения. Инициализирует TCA-зависимости с live-провайдерами.
+// Вызывается один раз при старте. Все DI-ключи регистрируются через withDependencies.
 
 import SwiftUI
+import ComposableArchitecture
 
 @main
 struct AIVibeApp: App {
+    @State private var router: AIProviderRouter?
 
     init() {
-        AppDependencies.configure()
+        // Инициализируем зависимости до построения Scene
     }
 
     var body: some Scene {
         WindowGroup {
-            // TODO: Replace with full TabView / navigation once more features land
-            RoomScanEntry()
+            // Оборачиваем всё дерево в withDependencies, чтобы TCA-редьюсеры
+            // получали реальный AIProviderRouter с Triplex Fallback
+            if let router {
+                AppRootView()
+                    .environment(\.aiRouter, router)
+                    .task {
+                        // Фоновый health-check стартует автоматически в роутере
+                    }
+            } else {
+                ProgressView("Загрузка AI-модулей…")
+                    .task {
+                        self.router = AppDependencies.prepareLiveRouter()
+                    }
+            }
         }
     }
+}
+
+// MARK: - Корневой экран (заглушка для SESSION_02)
+
+/// Временный корневой экран. В SESSION_03 будет заменён на ARDesigner.
+private struct AppRootView: View {
+    @Environment(\.aiRouter) private var router
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 64))
+                .foregroundStyle(.tint)
+
+            Text("AIVibe")
+                .font(.largeTitle)
+                .bold()
+
+            Text("AI-дизайнер интерьеров")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Button("Проверить AI-роутер") {
+                Task {
+                    await testRouter()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+    }
+
+    private func testRouter() async {
+        let prompt = AIPrompt(
+            messages: [ChatMessage(role: .user, content: "Какой стиль интерьера подойдёт для маленькой кухни?")]
+        )
+
+        do {
+            let response = try await router.complete(prompt: prompt)
+            print("✅ AI ответил: \(response.text.prefix(100))... (провайдер: \(response.providerName))")
+        } catch {
+            print("❌ Ошибка AI: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - TCA Dependency Environment
+
+/// Ключ окружения для AIProviderRouter.
+/// Позволяет передавать роутер через `.environment(\.aiRouter, router)`.
+extension EnvironmentValues {
+    @Entry var aiRouter: AIProviderRouter = {
+        // Значение по умолчанию — пустой роутер (будет заменён в WindowGroup)
+        AIProviderRouter(providers: [])
+    }()
 }

@@ -46,7 +46,7 @@ AIVibe/
 
 1. Клонируйте репозиторий:
    ```bash
-   git clone https://github.com/nicklockwood/AIVibe.git
+   git clone https://github.com/irosssss/AIVibe2026.git
    cd AIVibe
    ```
 

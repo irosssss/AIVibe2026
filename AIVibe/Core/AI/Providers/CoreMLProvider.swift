@@ -144,7 +144,8 @@ public actor CoreMLProvider: AIProviderProtocol {
 // MARK: - MLModel Wrapper
 
 /// Обёртка над MLModel для реализации протокола CoreMLModelProviding.
-private final class AIVibeMLModelWrapper: CoreMLModelProviding, @unchecked Sendable {
+/// `MLModel` thread-safe (iOS 18+), поэтому Sendable без @unchecked.
+private struct AIVibeMLModelWrapper: CoreMLModelProviding, Sendable {
     private let mlModel: MLModel
 
     init(mlModel: MLModel) {

@@ -11,17 +11,8 @@ import ComposableArchitecture
 
 public enum AppDependencies {
 
-    /// Собирает и регистрирует все live-зависимости.
-    /// Вызывается один раз при старте приложения в AIVibeApp.
-    @MainActor
-    public static func configure() {
-        // Конфигурируем роутер через prepareLiveRouter()
-        // Чтобы переопределить DependencyKey нужен custom DI-контейнер
-        // При использовании TCA — через withDependencies в Scene
-        _ = prepareLiveRouter()
-    }
-
     /// Создаёт live-роутер с реальными провайдерами.
+    /// Вызывается один раз в AppEntry.swift при старте приложения.
     public static func prepareLiveRouter() -> AIProviderRouter {
         let circuitBreaker = CircuitBreaker(
             config: CircuitBreaker.Configuration(
@@ -78,7 +69,7 @@ public enum AppDependencies {
 
 /// Получает IAM-токен Yandex Cloud через backend-прокси.
 /// Прокси сам получает и обновляет токены через сервисный аккаунт.
-private struct BackendIAMTokenFetcher: IAMTokenFetching {
+private struct BackendIAMTokenFetcher: IAMTokenFetching, Sendable {
     private let backendURL: URL = {
         let urlStr = ProcessInfo.processInfo.environment["BACKEND_BASE_URL"]
             ?? "https://api.aivibe.ru"
@@ -96,7 +87,7 @@ private struct BackendIAMTokenFetcher: IAMTokenFetching {
 }
 
 /// Получает OAuth-токен GigaChat через backend-прокси.
-private struct BackendGigaChatTokenProvider: GigaChatTokenProviding {
+private struct BackendGigaChatTokenProvider: GigaChatTokenProviding, Sendable {
     private let backendURL: URL = {
         let urlStr = ProcessInfo.processInfo.environment["BACKEND_BASE_URL"]
             ?? "https://api.aivibe.ru"
@@ -114,7 +105,7 @@ private struct BackendGigaChatTokenProvider: GigaChatTokenProviding {
 }
 
 /// Универсальная модель ответа токен-прокси.
-private struct TokenResponse: Decodable {
+private struct TokenResponse: Decodable, Sendable {
     let token: String
     let expiresAt: Date?
 

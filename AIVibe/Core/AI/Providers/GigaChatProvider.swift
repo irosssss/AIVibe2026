@@ -8,6 +8,7 @@
 import Foundation
 import CryptoKit
 import Logging
+import os
 
 // MARK: - Token Provider Protocol
 
@@ -73,16 +74,15 @@ private struct GigaChatResponse: Decodable {
 // MARK: - Certificate Delegate
 
 /// Handles Sberbank's TLS certificate with public-key pinning (SHA-256).
+/// Thread-safe: uses `OSAllocatedUnfairLock` for `isPinningConfigured`.
 /// When `pinnedHashes` contains the placeholder value, pinning is *disabled*
 /// and the delegate falls back to default evaluation — this is safe because
 /// default evaluation still validates the certificate chain against the OS
 /// trust store.  Replace the placeholder with real SHA-256 hashes of
 /// Sberbank's public keys before shipping to production.
-private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+private final class SberCertificateDelegate: NSObject, URLSessionDelegate, Sendable {
 
-    /// SHA-256 hashes of Sberbank certificate public keys.
-    /// Update when the certificate rotates.
-    /// Set via environment or remote config in production.
+    /// SHA-256 hashes of Sberbank certificate public keys (immutable, so no lock needed).
     private let pinnedHashes: Set<String> = {
         if let envHashes = ProcessInfo.processInfo.environment["SBER_CERT_HASHES"] {
             return Set(envHashes.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
@@ -90,9 +90,20 @@ private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unch
         return ["SBER_CERT_HASH_PLACEHOLDER"]
     }()
 
-    /// Whether real pinning is configured (no placeholder values).
-    private var isPinningConfigured: Bool {
-        !pinnedHashes.contains("SBER_CERT_HASH_PLACEHOLDER") && !pinnedHashes.isEmpty
+    /// Thread-safe computed property: whether real pinning is configured (no placeholders).
+    private let _isPinningConfigured: OSAllocatedUnfairLock<Bool>
+
+    override init() {
+        let hashes = pinnedHashes
+        self._isPinningConfigured = OSAllocatedUnfairLock(
+            initialState: !hashes.contains("SBER_CERT_HASH_PLACEHOLDER") && !hashes.isEmpty
+        )
+    }
+
+    /// Computes SHA-256 hex digest of data using CryptoKit.
+    private func sha256Hex(_ data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     func urlSession(
@@ -109,7 +120,7 @@ private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unch
         }
 
         // If pinning is not configured, use default OS evaluation (still validates chain).
-        guard isPinningConfigured else {
+        guard _isPinningConfigured.withLock({ $0 }) else {
             completionHandler(.performDefaultHandling, nil)
             return
         }
@@ -136,18 +147,13 @@ private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unch
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
-
-    /// Computes SHA-256 hex digest of data using CryptoKit.
-    private func sha256Hex(_ data: Data) -> String {
-        let digest = SHA256.hash(data: data)
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
 }
 
 // MARK: - GigaChatProvider
 
 /// Провайдер GigaChat. Цепочка: GigaChat-Max → GigaChat-Pro (внутренний fallback).
-public final class GigaChatProvider: AIProviderProtocol {
+/// Все свойства Sendable (config, tokenProvider, session), поэтому класс Sendable без @unchecked.
+public final class GigaChatProvider: AIProviderProtocol, Sendable {
 
     // MARK: - Конфигурация
 

@@ -63,8 +63,8 @@ private struct YandexGPTResponse: Decodable {
 // MARK: - YandexGPTProvider
 
 /// Провайдер YandexGPT 5 / YandexGPT 5 Lite.
-/// Triplex: если основная модель недоступна — пробует lite внутри провайдера.
-public final class YandexGPTProvider: AIProviderProtocol {
+/// Triplex: если основная модель недоступна — про��ует lite внутри провайдера.
+public final class YandexGPTProvider: AIProviderProtocol, Sendable {
 
     // MARK: - Конфигурация
 

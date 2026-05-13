@@ -1,7 +1,7 @@
 // AIVibe/Core/AI/AIProviderRouter.swift
 // Модуль: Core/AI
-// Главный роутер AI-провайдеров. Triplex Fallback: YandexGPT → GigaChat → CoreML.
-// Содержит Circuit Breaker, логирование в AppMetrica, фоновый health-check.
+// Гла��ный роутер AI-провайдеров. Triplex Fallback: YandexGPT → GigaChat → CoreML.
+// Circuit Breaker для каждого провайдера, логирование в AppMetrica.
 
 import Foundation
 import Logging
@@ -16,59 +16,30 @@ import ComposableArchitecture
 /// 2. GigaChat-Max (резервный)
 /// 3. Core ML      (оффлайн)
 ///
-/// Если провайдер падает `failureThreshold` раз подряд —
-/// Circuit Breaker пропускает его на `cooldownDuration`.
-public final class AIProviderRouter: Sendable {
+/// Если провайдер падает `threshold` раз подряд —
+/// Circuit Breaker пропускает его на `timeout` секунд.
+public actor AIProviderRouter {
 
     // MARK: - Dependencies
 
     private let providers: [any AIProviderProtocol]
-    private let circuitBreaker: CircuitBreaker
+    private var breakers: [String: CircuitBreaker] = [:]
     private let analytics: AnalyticsLogging
     private let logger = Logger(label: "ai.router")
-
-    // Фоновый health-check task
-    private let healthCheckTask: Task<Void, Never>
 
     // MARK: - Init
 
     public init(
         providers: [any AIProviderProtocol],
-        circuitBreaker: CircuitBreaker = CircuitBreaker(),
-        analytics: AnalyticsLogging = NoopAnalytics(),
-        healthCheckInterval: TimeInterval = 60
+        analytics: AnalyticsLogging = NoopAnalytics()
     ) {
-        self.providers      = providers
-        self.circuitBreaker = circuitBreaker
-        self.analytics      = analytics
+        self.providers = providers
+        self.analytics = analytics
 
-        // Фоновый health-check: каждые healthCheckInterval секунд
-        // проверяем провайдеры и сбрасываем breaker если они снова живы
-        let cbRef = circuitBreaker
-        let logRef = Logger(label: "ai.router.health")
-        let providersCopy = providers
-
-        healthCheckTask = Task.detached(priority: .background) {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(healthCheckInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-
-                for provider in providersCopy {
-                    let allowed = await cbRef.isAllowed(provider: provider.name)
-                    guard !allowed else { continue } // Пропускаем открытые (уже в cooldown)
-
-                    let available = await provider.isAvailable
-                    if available {
-                        await cbRef.reset(provider: provider.name)
-                        logRef.info("💚 Health-check: \(provider.name) снова доступен")
-                    }
-                }
-            }
+        // Создаём Circuit Breaker для каждого провайдера
+        for provider in providers {
+            breakers[provider.name] = CircuitBreaker()
         }
-    }
-
-    deinit {
-        healthCheckTask.cancel()
     }
 
     // MARK: - Public API
@@ -76,14 +47,40 @@ public final class AIProviderRouter: Sendable {
     /// Выполняет запрос через первый доступный провайдер.
     /// Логирует каждый fallback в аналитику.
     public func complete(prompt: AIPrompt) async throws -> AIResponse {
+        try await routeRequest { provider in
+            try await provider.complete(prompt: prompt)
+        }
+    }
+
+    /// Анализирует изображение через первый поддерживающий провайдер.
+    public func analyzeImage(_ imageData: Data, prompt: String) async throws -> AIResponse {
+        try await routeRequest { provider in
+            try await provider.analyzeImage(imageData, prompt: prompt)
+        }
+    }
+
+    // MARK: - Private: Generic Router
+
+    /// Обобщённый метод маршрутизации.
+    /// - Параметр `operation`: замыкание, выполняемое на каждом провайдере.
+    /// - Triplex Fallback: пробует каждого по очереди.
+    /// - Circuit Breaker: если открыт — пропускает провайдера.
+    /// - Каждый fallback логируется в аналитику.
+    /// - Возвращает результат первого успешного провайдера.
+    /// - Если все провайдеры исчерпаны — бросает `allProvidersExhausted`.
+    private func routeRequest<T>(
+        _ operation: (any AIProviderProtocol) async throws -> T
+    ) async throws -> T {
         var lastError: Error?
 
         for provider in providers {
-            // Проверяем Circuit Breaker
-            let allowed = await circuitBreaker.isAllowed(provider: provider.name)
+            // 1. Проверяем Circuit Breaker
+            let breaker = breakers[provider.name] ?? CircuitBreaker()
+            let allowed = await breaker.canRequest()
+
             guard allowed else {
-                let cooldown = await circuitBreaker.cooldownRemaining(provider: provider.name)
-                logger.info("⏸️ Пропускаем \(provider.name): Circuit Breaker открыт ещё \(Int(cooldown))с")
+                let cooldown = breaker.cooldownRemaining
+                logger.info("⏸️  Пропускаем \(provider.name): Circuit Breaker открыт ещё \(Int(cooldown))с")
                 analytics.log(
                     event: "ai_circuit_breaker_skip",
                     params: ["provider": provider.name, "cooldown": cooldown]
@@ -95,30 +92,33 @@ public final class AIProviderRouter: Sendable {
                 continue
             }
 
+            // 2. Выполняем запрос
             do {
                 logger.info("🔄 Пробуем провайдер: \(provider.name)")
-                let response = try await provider.complete(prompt: prompt)
+                let result = try await operation(provider)
 
                 // Успех — сбрасываем Circuit Breaker
-                await circuitBreaker.recordSuccess(provider: provider.name)
+                await breaker.recordSuccess()
 
                 analytics.log(
                     event: "ai_request_success",
-                    params: [
-                        "provider": provider.name,
-                        "offline": response.isOffline,
-                        "tokens": response.tokensUsed
-                    ]
+                    params: ["provider": provider.name]
                 )
 
-                return response
+                return result
+
+            } catch AIError.providerUnavailable {
+                // Провайдер не поддерживает операцию (например, vision) — идём дальше без записи провала
+                logger.info("⏩ \(provider.name): не поддерживает эту операцию")
+                lastError = error
+                continue
 
             } catch {
                 lastError = error
-                logger.warning("❌ \(provider.name) вернул ошибку: \(error)")
+                logger.warning("❌ \(provider.name) вернул ошибку: \(error.localizedDescription)")
 
                 // Записываем провал в Circuit Breaker
-                await circuitBreaker.recordFailure(provider: provider.name)
+                await breaker.recordFailure()
 
                 analytics.log(
                     event: "ai_provider_fallback",
@@ -132,30 +132,6 @@ public final class AIProviderRouter: Sendable {
 
         // Все провайдеры исчерпаны
         analytics.log(event: "ai_all_providers_exhausted", params: [:])
-        throw lastError ?? AIError.allProvidersExhausted
-    }
-
-    /// Анализирует изображение через первый поддерживающий провайдер.
-    public func analyzeImage(_ imageData: Data, prompt: String) async throws -> AIResponse {
-        var lastError: Error?
-
-        for provider in providers {
-            let allowed = await circuitBreaker.isAllowed(provider: provider.name)
-            guard allowed else { continue }
-
-            do {
-                let response = try await provider.analyzeImage(imageData, prompt: prompt)
-                await circuitBreaker.recordSuccess(provider: provider.name)
-                return response
-            } catch AIError.providerUnavailable {
-                // Этот провайдер не поддерживает vision — идём дальше без записи провала
-                continue
-            } catch {
-                lastError = error
-                await circuitBreaker.recordFailure(provider: provider.name)
-            }
-        }
-
         throw lastError ?? AIError.allProvidersExhausted
     }
 }

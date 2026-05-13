@@ -1,73 +1,54 @@
 // AIVibe/Core/AI/CircuitBreaker.swift
 // Модуль: Core/AI
 // Circuit Breaker паттерн для AI-провайдеров.
-// Если провайдер падает failureThreshold раз подряд — отключается на cooldownDuration.
+// Один экземпляр = один провайдер.
+// Если провайдер падает threshold раз подряд — отключается на timeout секунд.
 
 import Foundation
 import Logging
 
-// MARK: - Circuit Breaker State
-
-/// Состояние Circuit Breaker для одного провайдера.
-private struct BreakerState: Sendable {
-    enum Status: Sendable {
-        case closed              // Всё работает
-        case open(until: Date)   // Провайдер отключён до указанного времени
-        case halfOpen            // Пробуем один запрос для проверки
-    }
-
-    var status: Status = .closed
-    var failureCount: Int = 0
-    var lastFailureAt: Date?
-}
-
 // MARK: - CircuitBreaker
 
-/// Thread-safe Circuit Breaker для пула AI-провайдеров.
-/// Использует actor для изоляции состоян��я.
+/// Thread-safe Circuit Breaker для одного AI-провайдера.
+/// Хранит одно состояние: closed → open(until) → halfOpen → closed.
 public actor CircuitBreaker {
 
-    // MARK: - Конфигурация
+    // MARK: - State
 
-    public struct Configuration: Sendable {
-        /// Сколько подряд провалов открывают прерыватель
-        let failureThreshold: Int
-        /// Сколько секунд провайдер «отдыхает» после открытия
-        let cooldownDuration: TimeInterval
-        /// Через сколько секунд переходим из open → halfOpen для проверки
-        let halfOpenTimeout: TimeInterval
-
-        public init(
-            failureThreshold: Int    = 3,
-            cooldownDuration: TimeInterval  = 300, // 5 минут
-            halfOpenTimeout: TimeInterval   = 60   // 1 минута
-        ) {
-            self.failureThreshold = failureThreshold
-            self.cooldownDuration = cooldownDuration
-            self.halfOpenTimeout  = halfOpenTimeout
-        }
+    /// Состояние Circuit Breaker.
+    public enum State: Sendable {
+        /// Всё исправно, запросы разрешены.
+        case closed
+        /// Провайдер отключён до указанного времени.
+        case open(until: Date)
+        /// Пробный запрос для проверки после cooldown.
+        case halfOpen
     }
 
     // MARK: - Properties
 
-    private var states: [String: BreakerState] = [:]
-    private let config: Configuration
+    private var state: State = .closed
+    private var failureCount: Int = 0
+    private let threshold: Int
+    private let timeout: TimeInterval
     private let logger = Logger(label: "ai.circuit-breaker")
 
     // MARK: - Init
 
-    public init(config: Configuration = .init()) {
-        self.config = config
+    public init(
+        threshold: Int = 3,
+        timeout: TimeInterval = 300 // 5 минут
+    ) {
+        self.threshold = threshold
+        self.timeout = timeout
     }
 
     // MARK: - Public API
 
-    /// Проверяет разрешён ли запрос к провайдеру.
+    /// Проверяет разрешён ли запрос.
     /// - Returns: `true` — можно делать запрос; `false` — Circuit Breaker открыт.
-    public func isAllowed(provider: String) -> Bool {
-        let state = states[provider] ?? BreakerState()
-
-        switch state.status {
+    public func canRequest() -> Bool {
+        switch state {
         case .closed:
             return true
         case .halfOpen:
@@ -75,54 +56,51 @@ public actor CircuitBreaker {
         case .open(let until):
             if Date() > until {
                 // Переходим в halfOpen — пробуем один запрос
-                states[provider]?.status = .halfOpen
-                logger.info("⚡ \(provider): Circuit Breaker → halfOpen")
+                state = .halfOpen
+                logger.info("⚡ Circuit Breaker → halfOpen")
                 return true
             }
             let remaining = until.timeIntervalSinceNow
-            logger.debug("🔴 \(provider): Circuit Breaker открыт ещё \(Int(remaining))с")
+            logger.debug("🔴 Circuit Breaker открыт ещё \(Int(remaining))с")
             return false
         }
     }
 
     /// Записывает успешный запрос — сбрасывает счётчик провалов.
-    public func recordSuccess(provider: String) {
-        guard states[provider] != nil else { return }
-        states[provider] = BreakerState() // Полный сброс
-        logger.info("✅ \(provider): Circuit Breaker сброшен (success)")
+    public func recordSuccess() {
+        state = .closed
+        failureCount = 0
+        logger.info("✅ Circuit Breaker сброшен (success)")
     }
 
     /// Записывает провал — увеличивает счётчик, при достижении порога — открывает прерыватель.
-    public func recordFailure(provider: String) {
-        var state = states[provider] ?? BreakerState()
-        state.failureCount  += 1
-        state.lastFailureAt  = Date()
+    public func recordFailure() {
+        failureCount += 1
 
-        if state.failureCount >= config.failureThreshold {
-            let reopenAt = Date().addingTimeInterval(config.cooldownDuration)
-            state.status = .open(until: reopenAt)
+        if failureCount >= threshold {
+            let reopenAt = Date().addingTimeInterval(timeout)
+            state = .open(until: reopenAt)
             logger.warning(
-                "🔴 \(provider): Circuit Breaker ОТКРЫТ на \(Int(config.cooldownDuration))с " +
-                "(провалов подряд: \(state.failureCount))"
+                "🔴 Circuit Breaker ОТКРЫТ на \(Int(timeout))с " +
+                "(провалов подряд: \(failureCount))"
             )
         } else {
             logger.warning(
-                "⚠️ \(provider): провал \(state.failureCount)/\(config.failureThreshold)"
+                "⚠️ провал \(failureCount)/\(threshold)"
             )
         }
-
-        states[provider] = state
     }
 
-    /// Оставшееся время cooldown для провайдера (0 если closed/halfOpen).
-    public func cooldownRemaining(provider: String) -> TimeInterval {
-        guard case .open(let until) = states[provider]?.status else { return 0 }
+    /// Оставшееся время cooldown (0 если closed/halfOpen).
+    public var cooldownRemaining: TimeInterval {
+        guard case .open(let until) = state else { return 0 }
         return max(0, until.timeIntervalSinceNow)
     }
 
-    /// Принудительно сбрасывает состояние провайдера (для тестов и ручного управления).
-    public func reset(provider: String) {
-        states[provider] = BreakerState()
-        logger.info("🔄 \(provider): Circuit Breaker сброшен вручную")
+    /// Принудительно сбрасывает состояние (для тестов и ручного управления).
+    public func reset() {
+        state = .closed
+        failureCount = 0
+        logger.info("🔄 Circuit Breaker сброшен вручную")
     }
 }
