@@ -1,0 +1,23 @@
+# Normalize line endings to LF in repo, auto-convert on checkout
+* text=auto eol=lf
+
+# Force LF for Swift and shell
+*.swift text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+
+# Force CRLF for Windows-only files
+*.bat  text eol=crlf
+*.sln  text eol=crlf
+
+# Treat binaries as binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.zip  binary

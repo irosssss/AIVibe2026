@@ -1,0 +1,56 @@
+import SwiftUI
+import ComposableArchitecture
+
+@MainActor
+public struct RoomScanEntry: View {
+    @State private var store = Store(initialState: RoomScanFeature.State()) {
+        RoomScanFeature()
+    }
+    
+    public init() {}
+    
+    public var body: some View {
+        RoomScanView(store: store)
+    }
+}
+
+// MARK: - Main View (Wrapper)
+struct RoomScanView: View {
+    let store: StoreOf<RoomScanFeature>
+    let viewStore: ViewStore<Void, RoomScanFeature.Action>
+    
+    var body: some View {
+        NavigationStack {
+            if viewStore.status == .idle {
+                Button("Start Scan") {
+                    viewStore.send(.startScan)
+                }
+                .padding()
+            } else {
+                RoomScanContent(store: store)
+            }
+        }
+        .navigationTitle("AR RoomScan")
+    }
+}
+
+struct RoomScanContent: View {
+    let store: StoreOf<RoomScanFeature>
+    let viewStore: ViewStore<RoomScanFeature.State, RoomScanFeature.Action>
+    
+    var body: some View {
+        ZStack {
+            // Здесь должен быть AR View (RealityView)
+            Text("Scanning...")
+            
+            if viewStore.status == .failure {
+                VStack {
+                    Text("Error: \(viewStore.errorMessage ?? "")")
+                    Button("Try Again") {
+                        viewStore.send(.startScan)
+                    }
+                }
+            }
+        }
+    }
+}

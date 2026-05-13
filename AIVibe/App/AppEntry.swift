@@ -1,6 +1,6 @@
 // AIVibe
-// Модуль: App
-// Точка входа приложения. iOS 15+ App Lifecycle.
+// Module: App
+// Entry point. iOS 18 / Swift 6 App Lifecycle.
 
 import SwiftUI
 
@@ -8,7 +8,8 @@ import SwiftUI
 struct AIVibeApp: App {
     var body: some Scene {
         WindowGroup {
-            Text("AIVibe Initializing...")
+            // TODO: Replace with full TabView / navigation once more features land
+            RoomScanEntry()
         }
     }
 }
