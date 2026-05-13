@@ -9,7 +9,9 @@ import Foundation
 import Logging
 #endif
 
-/// HTTP-клиент для взаимодействия с REST API.
+/// HTTP-клиент для взаим��действия с REST API.
+// NOTE: @unchecked Sendable — URLSession и JSONDecoder thread-safe,
+// все mutable поля (session, decoder, timeout) только для чтения.
 public final class NetworkClient: @unchecked Sendable {
 
     // MARK: - Properties

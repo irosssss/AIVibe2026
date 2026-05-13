@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 // MARK: - Analytics Event
 
@@ -24,38 +25,33 @@ protocol AnalyticsProtocol {
 // MARK: - AppMetrica Implementation
 
 final class AppMetricaAnalytics: AnalyticsProtocol {
+    private let logger = AIVibeLogger.analytics
+
     func track(event: AnalyticsEvent) {
         // TODO: заменить Logger.log на AppMetrica.reportEvent(...) когда будет подключён SDK
-        #if DEBUG
-        print("[AppMetrica] Track: \(event)")
-        #endif
+        logger.info("Track: \(event)")
     }
     
     func setUserProperty(_ value: String, forKey key: String) {
         // TODO: заменить на AppMetrica.setUserProfileID / setUserProfileAttribute(...)
-        #if DEBUG
-        print("[AppMetrica] SetUserProperty: \(key) = \(value)")
-        #endif
+        logger.info("SetUserProperty: \(key) = \(value)")
     }
 }
 
 // MARK: - Mock for Tests
 
 final class MockAnalytics: AnalyticsProtocol {
+    private let logger = AIVibeLogger.analytics
     private(set) var trackedEvents: [AnalyticsEvent] = []
     private(set) var userProperties: [String: String] = [:]
     
     func track(event: AnalyticsEvent) {
         trackedEvents.append(event)
-        #if DEBUG
-        print("[MockAnalytics] Track: \(event)")
-        #endif
+        logger.info("Track: \(event)")
     }
     
     func setUserProperty(_ value: String, forKey key: String) {
         userProperties[key] = value
-        #if DEBUG
-        print("[MockAnalytics] SetUserProperty: \(key) = \(value)")
-        #endif
+        logger.info("SetUserProperty: \(key) = \(value)")
     }
 }
