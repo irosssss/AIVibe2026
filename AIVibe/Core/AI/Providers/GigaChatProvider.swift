@@ -6,6 +6,7 @@
 // Docs: https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-chat
 
 import Foundation
+import CryptoKit
 import Logging
 
 // MARK: - Token Provider Protocol
@@ -71,16 +72,28 @@ private struct GigaChatResponse: Decodable {
 
 // MARK: - Certificate Delegate
 
-/// Обработчик самоподписанного сертификата Сбербанка.
-/// ВАЖНО: в продакшене необходим certificate pinning через PublicKeyHash.
+/// Handles Sberbank's TLS certificate with public-key pinning (SHA-256).
+/// When `pinnedHashes` contains the placeholder value, pinning is *disabled*
+/// and the delegate falls back to default evaluation — this is safe because
+/// default evaluation still validates the certificate chain against the OS
+/// trust store.  Replace the placeholder with real SHA-256 hashes of
+/// Sberbank's public keys before shipping to production.
 private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
 
-    /// SHA-256 публичных ключей сертификатов Сбербанка.
-    /// Обновлять при смене сертификата.
-    private let pinnedHashes: Set<String> = [
-        // Placeholder: добавить реальные хэши в конфигурацию проекта
-        "SBER_CERT_HASH_PLACEHOLDER"
-    ]
+    /// SHA-256 hashes of Sberbank certificate public keys.
+    /// Update when the certificate rotates.
+    /// Set via environment or remote config in production.
+    private let pinnedHashes: Set<String> = {
+        if let envHashes = ProcessInfo.processInfo.environment["SBER_CERT_HASHES"] {
+            return Set(envHashes.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+        }
+        return ["SBER_CERT_HASH_PLACEHOLDER"]
+    }()
+
+    /// Whether real pinning is configured (no placeholder values).
+    private var isPinningConfigured: Bool {
+        !pinnedHashes.contains("SBER_CERT_HASH_PLACEHOLDER") && !pinnedHashes.isEmpty
+    }
 
     func urlSession(
         _ session: URLSession,
@@ -95,10 +108,39 @@ private final class SberCertificateDelegate: NSObject, URLSessionDelegate, @unch
             return
         }
 
-        // TODO: заменить на pinning через SecTrustCopyPublicKey + SHA-256 в production
-        // Сейчас принимаем любой сертификат от домена sberbank.ru
-        let credential = URLCredential(trust: serverTrust)
-        completionHandler(.useCredential, credential)
+        // If pinning is not configured, use default OS evaluation (still validates chain).
+        guard isPinningConfigured else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // Extract public key from the leaf certificate and compute SHA-256 hash.
+        guard
+            SecTrustGetCertificateCount(serverTrust) > 0,
+            let certificate = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
+            let leafCert = certificate.first,
+            let publicKey = SecCertificateCopyKey(leafCert),
+            let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as? Data
+        else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        let hash = sha256Hex(publicKeyData)
+
+        if pinnedHashes.contains(hash) {
+            let credential = URLCredential(trust: serverTrust)
+            completionHandler(.useCredential, credential)
+        } else {
+            // Hash mismatch — possible MITM.
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+
+    /// Computes SHA-256 hex digest of data using CryptoKit.
+    private func sha256Hex(_ data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 

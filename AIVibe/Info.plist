@@ -4,7 +4,7 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>AIVibe uses the camera to scan rooms for AR interior design.</string>
-	<key>NSLocalARUsageDescription</key>
-	<string>AIVibe needs AR access to measure and scan room geometry.</string>
+	<key>NSWorldSensingUsageDescription</key>
+	<string>AIVibe needs AR world sensing to measure and scan room geometry.</string>
 </dict>
 </plist>

@@ -4,6 +4,9 @@
 
 import ComposableArchitecture
 import Foundation
+#if canImport(RoomPlan)
+import RoomPlan
+#endif
 
 // MARK: - Scan Status
 
@@ -56,7 +59,12 @@ public struct RoomScanFeature: Sendable {
                 return .none
 
             case .stopScan:
-                return .none
+                guard state.status == .scanning else { return .none }
+                state.status = .idle
+                state.errorMessage = nil
+                return .run { _ in
+                    await RoomScanSession.shared.stop()
+                }
 
             case .scanDidSucceed(let data):
                 state.status = .success(data: data)
@@ -74,4 +82,28 @@ public struct RoomScanFeature: Sendable {
             }
         }
     }
+}
+
+// MARK: - RoomScanSession (shared session controller)
+
+/// Actor that owns the RoomCaptureSession instance so it can be stopped from the reducer effect.
+/// The Coordinator in RoomScanView registers its session here on creation.
+public actor RoomScanSession {
+    public static let shared = RoomScanSession()
+
+    #if canImport(RoomPlan)
+    private weak var activeSession: RoomCaptureSession?
+
+    public func register(_ session: RoomCaptureSession) {
+        activeSession = session
+    }
+
+    public func stop() {
+        activeSession?.stop()
+        activeSession = nil
+    }
+    #else
+    public func register(_ session: Any) {}
+    public func stop() {}
+    #endif
 }

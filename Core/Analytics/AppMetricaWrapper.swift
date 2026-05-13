@@ -5,6 +5,7 @@
 import Foundation
 
 /// Обёртка над AppMetrica для отправки аналитики.
+@MainActor
 public final class AppMetricaWrapper {
     
     /// Единственный экземпляр обёртки.

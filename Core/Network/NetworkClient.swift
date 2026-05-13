@@ -45,7 +45,7 @@ public enum NetworkError: LocalizedError {
 }
 
 /// Реализация сетевого клиента поверх URLSession.
-public final class NetworkClient: NetworkClientProtocol {
+public final class NetworkClient: NetworkClientProtocol, @unchecked Sendable {
     private let session: URLSession
     private let decoder: JSONDecoder
     

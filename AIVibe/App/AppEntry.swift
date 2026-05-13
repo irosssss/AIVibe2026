@@ -6,6 +6,11 @@ import SwiftUI
 
 @main
 struct AIVibeApp: App {
+
+    init() {
+        AppDependencies.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             // TODO: Replace with full TabView / navigation once more features land

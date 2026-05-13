@@ -82,10 +82,16 @@ struct RoomScanView: View {
 #if canImport(RoomPlan)
         RoomCaptureRepresentable(
             onCapturedRoom: { capturedRoom in
-                if let data = try? JSONEncoder().encode(capturedRoom) {
+                // CapturedRoom is not Encodable; export via USDZ.
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("room_scan_\(UUID().uuidString).usdz")
+                do {
+                    try capturedRoom.export(to: tempURL)
+                    let data = try Data(contentsOf: tempURL)
+                    try? FileManager.default.removeItem(at: tempURL)
                     store.send(.scanDidSucceed(data))
-                } else {
-                    store.send(.scanDidFail("Failed to encode captured room."))
+                } catch {
+                    store.send(.scanDidFail("USDZ export failed: \(error.localizedDescription)"))
                 }
             },
             onError: { error in
@@ -208,6 +214,8 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         func startIfNeeded() {
             guard !didStart else { return }
             didStart = true
+            // Register session so reducer can stop it
+            Task { await RoomScanSession.shared.register(session) }
             let config = RoomCaptureSession.Configuration()
             session.run(configuration: config)
         }

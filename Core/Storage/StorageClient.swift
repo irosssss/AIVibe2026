@@ -48,26 +48,32 @@ public enum StorageError: LocalizedError {
 }
 
 /// Реализация хранилища на основе UserDefaults + файловой системы.
-public final class StorageClient: StorageClientProtocol {
+public final class StorageClient: StorageClientProtocol, @unchecked Sendable {
     private let defaults: UserDefaults
     private let fileManager: FileManager
     private let storageDirectory: URL
     
-    /// Создаёт клиент хранения.
+    /// Default storage directory in Caches.
+    private static let defaultStorageDirectory: URL = {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("AIVibeStorage")
+    }()
+
+    /// Creates a storage client.
     /// - Parameters:
-    ///   - defaults: UserDefaults для небольших данных.
-    ///   - fileManager: FileManager для файловых операций.
+    ///   - defaults: UserDefaults for small data.
+    ///   - fileManager: FileManager for file operations.
+    ///   - storageDirectory: Root directory for file-based storage.
     public init(
         defaults: UserDefaults = .standard,
         fileManager: FileManager = .default,
-        storageDirectory: URL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("AIVibeStorage")
+        storageDirectory: URL? = nil
     ) {
         self.defaults = defaults
         self.fileManager = fileManager
-        self.storageDirectory = storageDirectory
-        
-        try? fileManager.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        self.storageDirectory = storageDirectory ?? Self.defaultStorageDirectory
+
+        try? fileManager.createDirectory(at: self.storageDirectory, withIntermediateDirectories: true)
     }
     
     public func save<T: Codable>(_ value: T, forKey key: String) throws {
