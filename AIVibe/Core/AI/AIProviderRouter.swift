@@ -23,7 +23,7 @@ public actor AIProviderRouter {
     // MARK: - Dependencies
 
     private let providers: [any AIProviderProtocol]
-    private var breakers: [String: CircuitBreaker] = [:]
+    internal var breakers: [String: CircuitBreaker] = [:]
     private let analytics: AnalyticsLogging
     private let logger = Logger(label: "ai.router")
 
