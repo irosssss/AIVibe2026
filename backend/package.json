@@ -1,0 +1,15 @@
+{
+  "name": "aivibe-backend",
+  "version": "1.0.0",
+  "description": "Yandex Cloud Function — AI Advisor proxy with triplex fallback",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": "20"
+  },
+  "author": "AIVibe Team",
+  "license": "MIT"
+}
