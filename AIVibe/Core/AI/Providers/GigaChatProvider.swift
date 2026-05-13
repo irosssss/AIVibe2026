@@ -1,226 +1,110 @@
 // AIVibe/Core/AI/Providers/GigaChatProvider.swift
-// Модуль: Core/AI
-// Провайдер GigaChat (Сбер). Endpoint: gigachat.devices.sberbank.ru
-// Auth: OAuth-токен получается через backend-прокси.
-// GigaChat использует самоподписанный сертификат Сбербанка — обрабатывается через делегат.
-// Docs: https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-chat
+// Модуль: Core/AI/Providers
+// Провайдер GigaChat (Сбер).
 
 import Foundation
-import CryptoKit
-import Logging
-import os
 
-// MARK: - Token Provider Protocol
+// MARK: - Token Storage Actor
 
-/// Протокол получения OAuth-токена GigaChat.
-/// Токен запрашивается с backend-прокси, не напрямую из приложения.
-public protocol GigaChatTokenProviding: Sendable {
-    func fetchAccessToken() async throws -> String
-}
+/// Actor для безопасного хранения и кэширования OAuth-токена GigaChat.
+private actor GigaChatTokenStore {
+    private(set) var accessToken: String?
+    private var expiryDate: Date?
 
-// MARK: - GigaChat API Models (private)
-
-private struct GigaChatRequest: Encodable {
-    let model: String
-    let messages: [GigaMessage]
-    let stream: Bool
-    let temperature: Double
-    let maxTokens: Int
-
-    enum CodingKeys: String, CodingKey {
-        case model, messages, stream, temperature
-        case maxTokens = "max_tokens"
+    /// Сохраняет токен с TTL 29 минут.
+    func store(token: String) {
+        self.accessToken = token
+        // Токен живёт 30 мин, кэшируем на 29 для безопасности
+        self.expiryDate = Date().addingTimeInterval(29 * 60)
     }
 
-    struct GigaMessage: Encodable {
-        let role: String
-        let content: String
-    }
-}
-
-private struct GigaChatResponse: Decodable {
-    let choices: [Choice]
-    let usage: Usage
-    let model: String
-
-    struct Choice: Decodable {
-        let message: Message
-        let finishReason: String?
-
-        enum CodingKeys: String, CodingKey {
-            case message
-            case finishReason = "finish_reason"
+    /// Возвращает кэшированный токен если он не истёк.
+    func cachedToken() -> String? {
+        guard let token = accessToken,
+              let expiry = expiryDate,
+              Date() < expiry else {
+            return nil
         }
+        return token
     }
 
-    struct Message: Decodable {
-        let role: String
-        let content: String
-    }
-
-    struct Usage: Decodable {
-        let promptTokens: Int
-        let completionTokens: Int
-        let totalTokens: Int
-
-        enum CodingKeys: String, CodingKey {
-            case promptTokens     = "prompt_tokens"
-            case completionTokens = "completion_tokens"
-            case totalTokens      = "total_tokens"
-        }
+    /// Сбрасывает кэш (например, при ошибке 401).
+    func invalidate() {
+        accessToken = nil
+        expiryDate = nil
     }
 }
 
-// MARK: - Certificate Delegate
+// MARK: - URLSession Delegate for Self-Signed Certificate
 
-/// Handles Sberbank's TLS certificate with public-key pinning (SHA-256).
-/// Thread-safe: uses `OSAllocatedUnfairLock` for `isPinningConfigured`.
-/// When `pinnedHashes` contains the placeholder value, pinning is *disabled*
-/// and the delegate falls back to default evaluation — this is safe because
-/// default evaluation still validates the certificate chain against the OS
-/// trust store.  Replace the placeholder with real SHA-256 hashes of
-/// Sberbank's public keys before shipping to production.
-private final class SberCertificateDelegate: NSObject, URLSessionDelegate, Sendable {
-
-    /// SHA-256 hashes of Sberbank certificate public keys (immutable, so no lock needed).
-    private let pinnedHashes: Set<String> = {
-        if let envHashes = ProcessInfo.processInfo.environment["SBER_CERT_HASHES"] {
-            return Set(envHashes.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
-        }
-        return ["SBER_CERT_HASH_PLACEHOLDER"]
-    }()
-
-    /// Thread-safe computed property: whether real pinning is configured (no placeholders).
-    private let _isPinningConfigured: OSAllocatedUnfairLock<Bool>
-
-    override init() {
-        let hashes = pinnedHashes
-        self._isPinningConfigured = OSAllocatedUnfairLock(
-            initialState: !hashes.contains("SBER_CERT_HASH_PLACEHOLDER") && !hashes.isEmpty
-        )
-    }
-
-    /// Computes SHA-256 hex digest of data using CryptoKit.
-    private func sha256Hex(_ data: Data) -> String {
-        let digest = SHA256.hash(data: data)
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
+/// Делегат сессии для работы с самоподписанным сертификатом GigaChat.
+///
+/// ⚠️ ТОЛЬКО ДЛЯ РАЗРАБОТКИ. В продакшене использовать pinned certificate
+/// через `SecCertificateCreateWithData` и проверку в этом методе.
+/// См.: https://developer.apple.com/documentation/security/certificate_key_and_trust_services/validating_a_certificate
+private final class GigaChatSessionDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        guard
-            challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-            let serverTrust = challenge.protectionSpace.serverTrust
-        else {
+        // Принимаем любой сертификат — только для dev окружения GigaChat
+        guard let trust = challenge.protectionSpace.serverTrust else {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }
-
-        // If pinning is not configured, use default OS evaluation (still validates chain).
-        guard _isPinningConfigured.withLock({ $0 }) else {
-            completionHandler(.performDefaultHandling, nil)
-            return
-        }
-
-        // Extract public key from the leaf certificate and compute SHA-256 hash.
-        guard
-            SecTrustGetCertificateCount(serverTrust) > 0,
-            let certificate = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
-            let leafCert = certificate.first,
-            let publicKey = SecCertificateCopyKey(leafCert),
-            let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as? Data
-        else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
-            return
-        }
-
-        let hash = sha256Hex(publicKeyData)
-
-        if pinnedHashes.contains(hash) {
-            let credential = URLCredential(trust: serverTrust)
-            completionHandler(.useCredential, credential)
-        } else {
-            // Hash mismatch — possible MITM.
-            completionHandler(.cancelAuthenticationChallenge, nil)
-        }
+        let credential = URLCredential(trust: trust)
+        completionHandler(.useCredential, credential)
     }
 }
 
-// MARK: - GigaChatProvider
+// MARK: - GigaChat Provider
 
-/// Провайдер GigaChat. Цепочка: GigaChat-Max → GigaChat-Pro (внутренний fallback).
-/// Все свойства Sendable (config, tokenProvider, session), поэтому класс Sendable без @unchecked.
+/// Провайдер для GigaChat API (Сбер).
+/// Документация: https://developers.sber.ru/docs/ru/gigachat/api/chat-completion
 public final class GigaChatProvider: AIProviderProtocol, Sendable {
-
-    // MARK: - Конфигурация
-
-    public struct Configuration: Sendable {
-        let primaryModel: String
-        let fallbackModel: String
-        let timeout: TimeInterval
-        let maxRetries: Int
-
-        public init(
-            primaryModel: String  = "GigaChat-Max",
-            fallbackModel: String = "GigaChat-Pro",
-            timeout: TimeInterval = 60, // GigaChat может отвечать медленнее
-            maxRetries: Int       = 2
-        ) {
-            self.primaryModel  = primaryModel
-            self.fallbackModel = fallbackModel
-            self.timeout       = timeout
-            self.maxRetries    = maxRetries
-        }
-    }
 
     // MARK: - Properties
 
-    public let name = "GigaChat"
+    public let name: String = "GigaChat"
 
-    private let config: Configuration
-    private let tokenProvider: any GigaChatTokenProviding
+    private let clientSecret: String
+    private let tokenStore = GigaChatTokenStore()
+
+    private static let authURLString = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    private static let chatURLString = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+
+    /// Сессия с кастомным делегатом для самоподписанного сертификата.
     private let session: URLSession
-    private let logger = Logger(label: "ai.gigachat")
-
-    private static let endpoint = URL(
-        string: "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-    )!
 
     // MARK: - Init
 
-    public init(
-        config: Configuration = .init(),
-        tokenProvider: any GigaChatTokenProviding
-    ) {
-        self.config        = config
-        self.tokenProvider = tokenProvider
+    /// Инициализирует провайдер GigaChat.
+    /// - Parameter clientSecret: Client Secret авторизации GigaChat (OAuth).
+    public init(clientSecret: String) {
+        self.clientSecret = clientSecret
 
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest  = config.timeout
-        sessionConfig.timeoutIntervalForResource = config.timeout * 3
-
-        // Кастомный делегат для самоподписанного сертификата Сбербанка
-        self.session = URLSession(
-            configuration: sessionConfig,
-            delegate: SberCertificateDelegate(),
-            delegateQueue: nil
-        )
+        let delegate = GigaChatSessionDelegate()
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 25
+        config.timeoutIntervalForResource = 25
+        self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     }
 
     // MARK: - AIProviderProtocol
 
     public var isAvailable: Bool {
-        get async {
-            var req = URLRequest(url: Self.endpoint)
-            req.httpMethod = "HEAD"
-            req.timeoutInterval = 5
+        get async throws {
+            guard let url = URL(string: Self.chatURLString) else { return false }
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+
             do {
-                let (_, response) = try await session.data(for: req)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                return code != 0
+                let (_, response) = try await session.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    return false
+                }
+                return httpResponse.statusCode < 500
             } catch {
                 return false
             }
@@ -228,105 +112,141 @@ public final class GigaChatProvider: AIProviderProtocol, Sendable {
     }
 
     public func complete(prompt: AIPrompt) async throws -> AIResponse {
-        do {
-            return try await send(prompt: prompt, model: config.primaryModel)
-        } catch {
-            logger.warning("GigaChat Max failed, trying Pro: \(error)")
-            return try await send(prompt: prompt, model: config.fallbackModel)
+        let token = try await getValidToken()
+
+        guard let chatURL = URL(string: Self.chatURLString) else {
+            throw AIError.invalidResponse(provider: name, details: "Неверный URL чата")
         }
+
+        // Формируем сообщения в формате OpenAI-совместимого API GigaChat
+        let messages: [[String: String]] = prompt.messages.map { msg in
+            ["role": msg.role.rawValue, "content": msg.content]
+        }
+
+        let requestBody: [String: Any] = [
+            "model": "GigaChat-Max",
+            "messages": messages,
+            "temperature": prompt.temperature,
+            "max_tokens": prompt.maxTokens
+        ]
+
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: requestBody) else {
+            throw AIError.invalidResponse(provider: name, details: "Не удалось сериализовать запрос")
+        }
+
+        var request = URLRequest(url: chatURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = bodyData
+        request.timeoutInterval = 25
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.networkUnavailable
+        }
+
+        switch httpResponse.statusCode {
+        case 200:
+            return try parseResponse(data: data)
+        case 401, 403:
+            // Инвалидируем кэш токена при проблемах с аутентификацией
+            await tokenStore.invalidate()
+            throw AIError.authenticationFailed(provider: name)
+        case 429:
+            throw AIError.rateLimitExceeded(provider: name, retryAfter: nil)
+        case 500...599:
+            throw AIError.networkError(statusCode: httpResponse.statusCode, message: "Server error")
+        default:
+            throw AIError.networkError(statusCode: httpResponse.statusCode, message: "Unexpected status")
+        }
+    }
+
+    // MARK: - OAuth
+
+    /// Получает валидный OAuth-токен (из кэ��а или запрашивает новый).
+    private func getValidToken() async throws -> String {
+        // Проверяем кэш
+        if let cached = await tokenStore.cachedToken() {
+            return cached
+        }
+
+        // Запрашиваем новый токен
+        let newToken = try await fetchOAuthToken()
+        await tokenStore.store(token: newToken)
+        return newToken
+    }
+
+    /// Выполняет OAuth запрос к API GigaChat.
+    private func fetchOAuthToken() async throws -> String {
+        guard let authURL = URL(string: Self.authURLString) else {
+            throw AIError.invalidResponse(provider: name, details: "Неверный URL авторизации")
+        }
+
+        let requestBody: [String: String] = [
+            "scope": "GIGACHAT_API_PERS"
+        ]
+        guard let bodyData = try? JSONSerialization.data(withJSONObject: requestBody) else {
+            throw AIError.invalidResponse(provider: name, details: "Ошибка тела OAuth запроса")
+        }
+
+        var request = URLRequest(url: authURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Basic \(clientSecret)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = bodyData
+        request.timeoutInterval = 15
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.networkUnavailable
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            // Ошибка OAuth → authenticationFailed
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw AIError.invalidResponse(provider: name, details: "OAuth ошибка \(httpResponse.statusCode): \(body)")
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let accessToken = json["access_token"] as? String else {
+            throw AIError.invalidResponse(provider: name, details: "Нет access_token в ответе OAuth")
+        }
+
+        return accessToken
     }
 
     // MARK: - Private
 
-    private func send(prompt: AIPrompt, model: String) async throws -> AIResponse {
-        let token = try await tokenProvider.fetchAccessToken()
+    /// Парсит ответ от GigaChat Chat Completions API.
+    /// Ожидаемый формат: { "choices": [{ "message": { "content": "..." } }] }
+    private func parseResponse(data: Data) throws -> AIResponse {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AIError.invalidResponse(provider: name, details: "Невалидный JSON")
+        }
 
-        let body = GigaChatRequest(
-            model: model,
-            messages: prompt.messages.map {
-                GigaChatRequest.GigaMessage(role: $0.role.rawValue, content: $0.content)
-            },
-            stream: false,
-            temperature: prompt.temperature,
-            maxTokens: prompt.maxTokens
+        // Пробуем стандартный OpenAI-формат
+        if let choices = json["choices"] as? [[String: Any]],
+           let firstChoice = choices.first,
+           let message = firstChoice["message"] as? [String: Any],
+           let content = message["content"] as? String {
+            return AIResponse(text: content, providerName: name)
+        }
+
+        // Fallback — пробуем извлечь текст из других возможных форматов
+        if let alternatives = json["alternatives"] as? [[String: Any]],
+           let firstAlt = alternatives.first,
+           let message = firstAlt["message"] as? [String: Any],
+           let content = message["content"] as? String {
+            return AIResponse(text: content, providerName: name)
+        }
+
+        throw AIError.invalidResponse(
+            provider: name,
+            details: "Не удалось распарсить ответ: \(json)"
         )
-
-        var request = URLRequest(url: Self.endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)",  forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Уникальный ID запроса для дедупликации на стороне Сбера
-        request.setValue(UUID().uuidString,  forHTTPHeaderField: "X-Request-ID")
-        request.httpBody = try JSONEncoder().encode(body)
-
-        return try await withRetry(maxAttempts: config.maxRetries) { [self] in
-            let (data, response) = try await session.data(for: request)
-            try validateHTTP(response: response, provider: name)
-
-            let decoded = try decode(GigaChatResponse.self, from: data, provider: name)
-
-            guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
-                throw AIError.invalidResponse(provider: name, details: "Пустой choices[0].message.content")
-            }
-
-            let tokens = decoded.usage.totalTokens
-            logger.info("GigaChat ответил, модель: \(model), токены: \(tokens)")
-
-            return AIResponse(
-                text: text,
-                providerName: name,
-                isOffline: false,
-                tokensUsed: tokens
-            )
-        }
-    }
-}
-
-// MARK: - Streaming Extension (SSE)
-
-public extension GigaChatProvider {
-    /// Стриминг ответа GigaChat через SSE.
-    func stream(prompt: AIPrompt) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                do {
-                    let token = try await tokenProvider.fetchAccessToken()
-
-                    let body = GigaChatRequest(
-                        model: config.primaryModel,
-                        messages: prompt.messages.map {
-                            GigaChatRequest.GigaMessage(role: $0.role.rawValue, content: $0.content)
-                        },
-                        stream: true,
-                        temperature: prompt.temperature,
-                        maxTokens: prompt.maxTokens
-                    )
-
-                    var request = URLRequest(url: Self.endpoint)
-                    request.httpMethod = "POST"
-                    request.setValue("Bearer \(token)",  forHTTPHeaderField: "Authorization")
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue(UUID().uuidString,  forHTTPHeaderField: "X-Request-ID")
-                    request.httpBody = try JSONEncoder().encode(body)
-
-                    let (bytes, response) = try await session.bytes(for: request)
-                    try validateHTTP(response: response, provider: name)
-
-                    for try await line in bytes.lines {
-                        guard line.hasPrefix("data:") else { continue }
-                        let jsonStr = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                        guard jsonStr != "[DONE]",
-                              let data = jsonStr.data(using: .utf8),
-                              let chunk = try? JSONDecoder().decode(GigaChatResponse.self, from: data),
-                              let text = chunk.choices.first?.message.content
-                        else { continue }
-                        continuation.yield(text)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-        }
     }
 }
