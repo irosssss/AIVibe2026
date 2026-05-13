@@ -10,7 +10,7 @@ import Foundation
 public enum ScanStatus: Equatable, Sendable {
     case idle
     case scanning
-    case success
+    case success(data: Data)
     case failure
 }
 
@@ -33,7 +33,8 @@ public struct RoomScanFeature: Sendable {
 
     public enum Action: Sendable {
         case startScan
-        case scanDidSucceed
+        case stopScan
+        case scanDidSucceed(Data)
         case scanDidFail(String)
         case resetScan
     }
@@ -52,11 +53,13 @@ public struct RoomScanFeature: Sendable {
                 guard state.status != .scanning else { return .none }
                 state.status = .scanning
                 state.errorMessage = nil
-                // TODO: запустить RoomPlanSession через Effect
                 return .none
 
-            case .scanDidSucceed:
-                state.status = .success
+            case .stopScan:
+                return .none
+
+            case .scanDidSucceed(let data):
+                state.status = .success(data: data)
                 return .none
 
             case .scanDidFail(let message):

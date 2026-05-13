@@ -1,25 +1,26 @@
 // AIVibe
 // Module: Features/RoomScan
 // TCA 1.19+ / Swift 6 / iOS 18
-// Fixes applied per plan-20260513-122603:
-//   ✅ #1  Store через @State (Observable, TCA 1.19+)
-//   ✅ #2  Все статусы обработаны (.idle / .scanning / .success / .failure)
-//   ✅ #3  Кнопка заблокирована во время сканирования
-//   ✅ #4  ViewStore убран, используется store напрямую (@ObservableState)
-//   ✅ #5  Типизация ViewStore удалена
-//   ✅ #6  #if canImport(RoomPlan) добавлен
-//   ✅ #7  @MainActor убран с Entry (View неявно @MainActor)
-//   ✅ #8  Строки вынесены в enum Strings
-//   ✅ #9  TODO для Info.plist прав
-//   ✅ #10 ViewStore не создаётся в body
-//   ✅ #11 Импорт модуля явный
-//   ✅ #12 Комментарии на русском заменены на TODO-метки
 
 import SwiftUI
 import ComposableArchitecture
 
+// MARK: - Strings
+
+private enum Strings {
+    static let title        = "AR RoomScan"
+    static let startScan    = "Start Scan"
+    static let stopScan     = "Stop Scan"
+    static let scanning     = "Scanning…"
+    static let success      = "Scan complete!"
+    static let tryAgain     = "Try Again"
+    static let reset        = "Scan Again"
+    static let noLiDAR      = "LiDAR scanner is not available on this device."
+    static let placeholder  = "Tap Start to begin scanning the room."
+    static func error(_ msg: String) -> String { "Error: \(msg)" }
+}
+
 // MARK: - Entry Point
-// ⚠️ Info.plist: добавьте NSCameraUsageDescription и NSLocalARUsageDescription
 
 public struct RoomScanEntry: View {
     @State private var store = Store(initialState: RoomScanFeature.State()) {
@@ -31,18 +32,6 @@ public struct RoomScanEntry: View {
     public var body: some View {
         RoomScanView(store: store)
     }
-}
-
-// MARK: - Strings
-
-private enum Strings {
-    static let title        = "AR RoomScan"
-    static let startScan    = "Start Scan"
-    static let scanning     = "Scanning…"
-    static let success      = "Scan complete!"
-    static let tryAgain     = "Try Again"
-    static let noLiDAR      = "LiDAR is not supported on this device."
-    static func error(_ msg: String) -> String { "Error: \(msg)" }
 }
 
 // MARK: - Main View
@@ -71,31 +60,59 @@ struct RoomScanView: View {
     // MARK: Sub-views
 
     private var idleView: some View {
-        Button(Strings.startScan) {
-            store.send(.startScan)
+        VStack(spacing: 24) {
+            Image(systemName: "camera.viewfinder")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+
+            Text(Strings.placeholder)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 32)
+
+            Button(Strings.startScan) {
+                store.send(.startScan)
+            }
+            .buttonStyle(.borderedProminent)
         }
-        .buttonStyle(.borderedProminent)
         .padding()
     }
 
     private var scanningView: some View {
-        ZStack {
 #if canImport(RoomPlan)
-            // TODO: Replace with RoomCaptureViewRepresentable
-            // See: https://developer.apple.com/documentation/RoomPlan
-            Color.black.ignoresSafeArea()
+        RoomCaptureRepresentable(
+            onCapturedRoom: { capturedRoom in
+                if let data = try? JSONEncoder().encode(capturedRoom) {
+                    store.send(.scanDidSucceed(data))
+                } else {
+                    store.send(.scanDidFail("Failed to encode captured room."))
+                }
+            },
+            onError: { error in
+                store.send(.scanDidFail(error.localizedDescription))
+            }
+        )
+        .overlay(alignment: .bottom) {
+            Button(Strings.stopScan) {
+                store.send(.stopScan)
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+            .padding()
+        }
+        .ignoresSafeArea()
 #else
-            Text(Strings.noLiDAR)
-                .foregroundStyle(.secondary)
-#endif
+        ZStack {
+            Color(.systemGray6).ignoresSafeArea()
             VStack(spacing: 16) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                Text(Strings.scanning)
-                    .foregroundStyle(.white)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(Strings.noLiDAR)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
             }
         }
+#endif
     }
 
     private var successView: some View {
@@ -103,9 +120,11 @@ struct RoomScanView: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.green)
+
             Text(Strings.success)
                 .font(.title2)
-            Button(Strings.startScan) {
+
+            Button(Strings.reset) {
                 store.send(.resetScan)
             }
             .buttonStyle(.bordered)
@@ -118,20 +137,105 @@ struct RoomScanView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(.red)
+
             if let message = store.errorMessage {
                 Text(Strings.error(message))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 32)
             }
+
             Button(Strings.tryAgain) {
                 store.send(.startScan)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(store.status == .scanning)
         }
         .padding()
     }
 }
+
+// MARK: - RoomCapture ViewRepresentable (RoomPlan)
+
+#if canImport(RoomPlan)
+import RoomPlan
+
+struct RoomCaptureRepresentable: UIViewRepresentable {
+    let onCapturedRoom: @Sendable (CapturedRoom) -> Void
+    let onError: @Sendable (Error) -> Void
+
+    func makeUIView(context: Context) -> RoomCaptureView {
+        let view = RoomCaptureView(frame: .zero)
+        view.captureSession = context.coordinator.session
+        view.delegate = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: RoomCaptureView, context: Context) {
+        // start the session when view appears
+        context.coordinator.startIfNeeded()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onCapturedRoom: onCapturedRoom,
+            onError: onError
+        )
+    }
+
+    class Coordinator: NSObject, RoomCaptureViewDelegate {
+
+        // MARK: Session
+
+        let session = RoomCaptureSession()
+
+        // MARK: Callbacks
+
+        private let onCapturedRoom: @Sendable (CapturedRoom) -> Void
+        private let onError: @Sendable (Error) -> Void
+
+        // MARK: State
+
+        private var didStart = false
+
+        init(
+            onCapturedRoom: @escaping @Sendable (CapturedRoom) -> Void,
+            onError: @escaping @Sendable (Error) -> Void
+        ) {
+            self.onCapturedRoom = onCapturedRoom
+            self.onError = onError
+        }
+
+        func startIfNeeded() {
+            guard !didStart else { return }
+            didStart = true
+            let config = RoomCaptureSession.Configuration()
+            session.run(configuration: config)
+        }
+
+        // MARK: RoomCaptureViewDelegate
+
+        func captureView(
+            shouldPresentRoomDataFor capturingData: RoomCaptureView.CapturingData
+        ) -> Bool {
+            true
+        }
+
+        func captureView(
+            _ captureView: RoomCaptureView,
+            didPresent processedRoom: CapturedRoom
+        ) {
+            onCapturedRoom(processedRoom)
+        }
+
+        func captureView(
+            _ captureView: RoomCaptureView,
+            didErrorWith error: Error
+        ) {
+            onError(error)
+        }
+    }
+}
+#endif
 
 // MARK: - Preview
 
