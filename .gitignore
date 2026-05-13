@@ -1,0 +1,59 @@
+# Xcode
+## Xcode
+build/
+DerivedData/
+*.xcuserdata
+*.xcscmblueprint
+*.xcconfig
+*.xcworkspace/xcuserdata/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+## CocoaPods
+Pods/
+*.xcworkspace
+
+## Carthage
+Carthage/Build/
+
+## Swift Package Manager
+.build/
+Package.resolved
+
+## Environment files
+.env
+.env.*
+!env.example
+
+## Secrets
+Secrets.plist
+*.p12
+*.mobileprovision
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Android
+*.class
+*.dex
+*.apk
+*.ap_
+
+# Tools
+*.swp
+*.swo
+*~

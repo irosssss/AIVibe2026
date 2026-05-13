@@ -1,0 +1,20 @@
+# Matchfile — управление сертификатами и provisioning profiles
+#
+# Заполните значения ниже:
+# git_url: URL git-репозитория для хранения сертификатов
+# apple_id: ваш Apple ID
+# team_id: Team ID из Apple Developer Portal
+# type: тип профилей (appstore, adhoc, development, enterprise)
+#
+# example:
+#   git_url("https://github.com/your-org/aivibe-certs.git")
+#   apple_id("your@apple.id")
+#   team_id("XXXXXXXXXX")
+#   type("appstore")
+#   git_branch("match")
+
+# git_url("")
+# apple_id("")
+# team_id("")
+# type("appstore")
+# git_branch("match")
