@@ -45,8 +45,8 @@
 | Июнь 2026 | `AIVibe/Core/AI/AIModels.swift` | Модели данных | СЕССИЯ 2 |
 | Июнь 2026 | `AIVibe/Core/AI/AIError.swift` | Типы ошибок | СЕССИЯ 2 |
 | Июнь 2026 | `AIVibe/Core/AI/CircuitBreaker.swift` | Circuit Breaker | СЕССИЯ 2 |
-| Июнь 2026 | `AIVibe/Core/AI/Providers/YandexGPTProvider.swift` | YandexGPT (YandexGPT 3) | СЕССИЯ 3 |
-| Июнь 2026 | `AIVibe/Core/AI/Providers/GigaChatProvider.swift` | GigaChat (GigaChat-2:max) | СЕССИЯ 4 |
+| Июнь 2026 | `AIVibe/Core/AI/Providers/YandexGPTProvider.swift` | YandexGPT (модель yandexgpt-5/latest) | СЕССИЯ 3 |
+| Июнь 2026 | `AIVibe/Core/AI/Providers/GigaChatProvider.swift` | GigaChat (модель GigaChat-Max) | СЕССИЯ 4 |
 | Июнь 2026 | `AIVibe/Core/AI/Providers/CoreMLProvider.swift` | CoreML (on-device fallback) | СЕССИЯ 5 |
 
 ### Этап 3 — Network & Analytics (Сессии 6–7)
@@ -129,10 +129,13 @@ Admin API endpoints:
 AIVibe/
 ├── Core/
 │   ├── AI/          → 7 файлов (protocol, router, circuit breaker, 3 provider, models, errors, helpers) ✅
-│   ├── Network/     → 2 файла (client, errors) ✅
-│   ├── Analytics/   → 1 файл (AppMetrica) ✅
+│   ├── Network/     �� 2 ф��йла (client, errors) ✅
+│   ├── Analytics/   → 1 файл (AppMetrica + AnalyticsLogging) ✅
 │   └── Storage/     → 1 файл (StorageClient) ✅
-├── (Features/)     → ⏳ Mac only
+├── Features/
+│   ├── AIAdvisor/   → ⏳ Ждёт Mac (SwiftUI chat + TCA)
+│   └── RoomScan/    → 🟡 Наброски есть, требуется Mac для RealityKit
+├── App/DI/          → AppDependencies.swift ✅ (исправлен под реальные типы)
 AIVibeTests/
 ├── AI/             → 2 файла (mock, router tests) ✅
 backend/            → 6 файлов (entry, 2 proxies, cache, package, readme) ✅

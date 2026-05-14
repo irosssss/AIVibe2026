@@ -94,7 +94,7 @@ public final class GigaChatProvider: AIProviderProtocol, Sendable {
     // MARK: - AIProviderProtocol
 
     public var isAvailable: Bool {
-        get async throws {
+        get async {
             guard let url = URL(string: Self.chatURLString) else { return false }
             var request = URLRequest(url: url)
             request.httpMethod = "HEAD"

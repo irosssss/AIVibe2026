@@ -25,7 +25,7 @@ protocol AnalyticsProtocol {
 // MARK: - AppMetrica Implementation
 
 final class AppMetricaAnalytics: AnalyticsProtocol {
-    private let logger = AIVibeLogger.analytics
+    private let logger = Logger(label: "ru.aivibe.app.analytics")
 
     func track(event: AnalyticsEvent) {
         // TODO: заменить Logger.log на AppMetrica.reportEvent(...) когда будет подключён SDK
@@ -38,10 +38,19 @@ final class AppMetricaAnalytics: AnalyticsProtocol {
     }
 }
 
+// MARK: - AnalyticsLogging (для AIProviderRouter)
+
+extension AppMetricaAnalytics: AnalyticsLogging {
+    func log(event: String, params: [String: any Sendable]) {
+        track(event: .aiRequestSent(provider: event)) // упрощённое логирование
+        logger.info("Track: \(event) — \(params)")
+    }
+}
+
 // MARK: - Mock for Tests
 
 final class MockAnalytics: AnalyticsProtocol {
-    private let logger = AIVibeLogger.analytics
+    private let logger = Logger(label: "ru.aivibe.app.analytics")
     private(set) var trackedEvents: [AnalyticsEvent] = []
     private(set) var userProperties: [String: String] = [:]
     

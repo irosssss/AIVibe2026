@@ -44,7 +44,7 @@ public final class YandexGPTProvider: AIProviderProtocol, Sendable {
     // MARK: - AIProviderProtocol
 
     public var isAvailable: Bool {
-        get async throws {
+        get async {
             var request = URLRequest(url: endpointURL)
             request.httpMethod = "HEAD"
             request.setValue("Bearer \(iamToken)", forHTTPHeaderField: "Authorization")

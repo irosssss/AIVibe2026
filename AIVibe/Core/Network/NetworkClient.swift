@@ -21,7 +21,7 @@ public final class NetworkClient: @unchecked Sendable {
     private let timeout: TimeInterval
 
     #if canImport(Logging)
-    private let logger = AIVibeLogger.network
+    private let logger = Logger(label: "ru.aivibe.app.network")
     #endif
 
     // MARK: - Init

@@ -1,8 +1,7 @@
 // AIVibe/App/DI/AppDependencies.swift
-// Модуль: App
+// Моду��ь: App
 // Сборка live-зависимостей приложения.
-// Здесь конфигурируются реальные провайдеры с параметрами из окружения.
-// API-ключи и токены получаются через IAM/OAuth прокси, не хранятся в бандле.
+// API-ключи получаются из переменных окружения (не хранятся в бандле).
 
 import Foundation
 import ComposableArchitecture
@@ -11,17 +10,9 @@ import ComposableArchitecture
 
 public enum AppDependencies {
 
-    /// Создаёт live-роутер с реальными провайдерами.
+    /// Создаёт live-р��утер с реальными провайдерами.
     /// Вызывается один раз в AppEntry.swift при старте приложения.
     public static func prepareLiveRouter() -> AIProviderRouter {
-        let circuitBreaker = CircuitBreaker(
-            config: CircuitBreaker.Configuration(
-                failureThreshold: 3,
-                cooldownDuration: 300, // 5 минут
-                halfOpenTimeout:  60
-            )
-        )
-
         let providers: [any AIProviderProtocol] = [
             makeYandexGPT(),
             makeGigaChat(),
@@ -30,98 +21,22 @@ public enum AppDependencies {
 
         return AIProviderRouter(
             providers: providers,
-            circuitBreaker: circuitBreaker,
-            analytics: AppMetricaAnalytics(),
-            healthCheckInterval: 60
+            analytics: AppMetricaAnalytics()
         )
     }
 
     // MARK: - Фабрики провайдеров
 
+    /// YandexGPT — IAM-токен + folderId из env
     private static func makeYandexGPT() -> YandexGPTProvider {
+        let iamToken = ProcessInfo.processInfo.environment["YANDEX_IAM_TOKEN"] ?? ""
         let folderID = ProcessInfo.processInfo.environment["YANDEX_FOLDER_ID"] ?? ""
-        let config = YandexGPTProvider.Configuration(
-            folderID: folderID,
-            timeout: 30,
-            maxRetries: 2
-        )
-        return YandexGPTProvider(
-            config: config,
-            tokenFetcher: BackendIAMTokenFetcher()
-        )
+        return YandexGPTProvider(iamToken: iamToken, folderId: folderID)
     }
 
+    /// GigaChat — clientSecret из env
     private static func makeGigaChat() -> GigaChatProvider {
-        let config = GigaChatProvider.Configuration(
-            primaryModel:  "GigaChat-Max",
-            fallbackModel: "GigaChat-Pro",
-            timeout: 60,
-            maxRetries: 2
-        )
-        return GigaChatProvider(
-            config: config,
-            tokenProvider: BackendGigaChatTokenProvider()
-        )
-    }
-}
-
-// MARK: - Backend Token Fetchers
-
-/// Получает IAM-токен Yandex Cloud через backend-прокси.
-/// Прокси сам получает и обновляет токены через сервисный аккаунт.
-private struct BackendIAMTokenFetcher: IAMTokenFetching, Sendable {
-    private let backendURL: URL = {
-        let urlStr = ProcessInfo.processInfo.environment["BACKEND_BASE_URL"]
-            ?? "https://api.aivibe.ru"
-        return URL(string: urlStr + "/v1/auth/yandex-iam")!
-    }()
-
-    func fetchToken() async throws -> String {
-        let (data, response) = try await URLSession.shared.data(from: backendURL)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AIError.authenticationFailed(provider: "YandexGPT")
-        }
-        let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-        return tokenResponse.token
-    }
-}
-
-/// Получает OAuth-токен GigaChat через backend-прокси.
-private struct BackendGigaChatTokenProvider: GigaChatTokenProviding, Sendable {
-    private let backendURL: URL = {
-        let urlStr = ProcessInfo.processInfo.environment["BACKEND_BASE_URL"]
-            ?? "https://api.aivibe.ru"
-        return URL(string: urlStr + "/v1/auth/gigachat")!
-    }()
-
-    func fetchAccessToken() async throws -> String {
-        let (data, response) = try await URLSession.shared.data(from: backendURL)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AIError.authenticationFailed(provider: "GigaChat")
-        }
-        let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-        return tokenResponse.token
-    }
-}
-
-/// Универсальная модель ответа токен-прокси.
-private struct TokenResponse: Decodable, Sendable {
-    let token: String
-    let expiresAt: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case token
-        case expiresAt = "expires_at"
-    }
-}
-
-// MARK: - AppMetrica Analytics
-
-/// Реализация AnalyticsLogging через AppMetrica.
-/// AppMetrica подключена через CocoaPods/бинарный фреймворк.
-struct AppMetricaAnalytics: AnalyticsLogging {
-    func log(event: String, params: [String: any Sendable]) {
-        // AppMetrica.reportEvent(event, parameters: params as? [String: Any], onFailure: nil)
-        // Раскомментировать после подключения AppMetrica SDK
+        let clientSecret = ProcessInfo.processInfo.environment["GIGACHAT_CLIENT_SECRET"] ?? ""
+        return GigaChatProvider(clientSecret: clientSecret)
     }
 }
