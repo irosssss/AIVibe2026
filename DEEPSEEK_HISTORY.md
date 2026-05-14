@@ -16,7 +16,7 @@
 ┌──────────────────────┐     ┌──────────────────┐     ┌─────────────┐
 │   AIVibe (iOS App)   │────→│   Backend        │────→│ YandexGPT   │
 │   SwiftUI + TCA      │     │   Node.js        │     │ GigaChat    │
-│   Swift 5.9          │     │   Cloud Function │     │ CoreML      │
+│   Swift 6           │     │   Cloud Function │     │ CoreML      │
 └──────────────────────┘     └──────────────────┘     └─────────────┘
          │                          │
          ▼                          ▼
@@ -31,7 +31,7 @@
 
 | Дата | Действие | Статус |
 |------|----------|--------|
-| Июнь 2026 | Созданы корневые документы: `DEEPSEEK_PROMPTS.md`, `HOW_TO_USE_v2.md`, `PROJECT_RULES_v2.md`, `SESSION_*` | ✅ |
+| Июнь 2026 | Созданы корневые документы: `DEEPSEEK_PROMPTS.md`, `PROJECT_RULES_v2.md`, `SESSION_*` | ✅ |
 | Июнь 2026 | Создан `Package.swift` (Swift Package Manager) | ✅ |
 | Июнь 2026 | Создан `.swiftlint.yml` | ✅ |
 
@@ -127,19 +127,19 @@ Admin API endpoints:
 
 ```
 AIVibe/
-├── Core/
+├── AIVibe/Core/
 │   ├── AI/          → 7 файлов (protocol, router, circuit breaker, 3 provider, models, errors, helpers) ✅
-│   ├── Network/     �� 2 ф��йла (client, errors) ✅
+│   ├── Network/     → 2 файла (client, errors) ✅
 │   ├── Analytics/   → 1 файл (AppMetrica + AnalyticsLogging) ✅
 │   └── Storage/     → 1 файл (StorageClient) ✅
-├── Features/
+├── AIVibe/Features/
 │   ├── AIAdvisor/   → ⏳ Ждёт Mac (SwiftUI chat + TCA)
 │   └── RoomScan/    → 🟡 Наброски есть, требуется Mac для RealityKit
-├── App/DI/          → AppDependencies.swift ✅ (исправлен под реальные типы)
-AIVibeTests/
-├── AI/             → 2 файла (mock, router tests) ✅
-backend/            → 6 файлов (entry, 2 proxies, cache, package, readme) ✅
-admin/admin-panel/  → TailAdmin React, готов к доработкам ✅
+├── AIVibe/App/DI/   → AppDependencies.swift ✅ (исправлен под реальные типы)
+├── AIVibeTests/
+│   └── AI/          → 2 файла (mock, router tests) ✅
+├── backend/         → 6 файлов (entry, 2 proxies, cache, package, readme) ✅
+└── admin/admin-panel/ → TailAdmin React, готов к доработкам ✅
 ```
 
 ---
@@ -148,7 +148,6 @@ admin/admin-panel/  → TailAdmin React, готов к доработкам ✅
 
 - [DEEPSEEK_PROMPTS.md](./DEEPSEEK_PROMPTS.md) — все задания DeepSeek по сессиям
 - [PROJECT_RULES_v2.md](./PROJECT_RULES_v2.md) — правила проекта
-- [HOW_TO_USE_v2.md](./HOW_TO_USE_v2.md) — инструкция по использованию
 - [backend/README.md](./backend/README.md) — документация backend
 - [admin/admin-panel/DEEPSEEK_HISTORY.md](./admin/admin-panel/DEEPSEEK_HISTORY.md) — история админ-панели
 

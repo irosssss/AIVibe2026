@@ -20,7 +20,6 @@ struct AIVibeApp: App {
             // получали реальный AIProviderRouter с Triplex Fallback
             if let router {
                 AppRootView()
-                    .environment(\.aiRouter, router)
                     .task {
                         // Фоновый health-check стартует автоматически в роутере
                     }
@@ -38,7 +37,7 @@ struct AIVibeApp: App {
 
 /// Временный корневой экран. В SESSION_03 будет заменён на ARDesigner.
 private struct AppRootView: View {
-    @Environment(\.aiRouter) private var router
+    @Dependency(\.aiRouter) private var router
 
     var body: some View {
         VStack(spacing: 20) {
@@ -76,15 +75,4 @@ private struct AppRootView: View {
             print("❌ Ошибка AI: \(error.localizedDescription)")
         }
     }
-}
-
-// MARK: - TCA Dependency Environment
-
-/// Ключ окружения для AIProviderRouter.
-/// Позволяет передавать роутер через `.environment(\.aiRouter, router)`.
-extension EnvironmentValues {
-    @Entry var aiRouter: AIProviderRouter = {
-        // Значение по умолчанию — пустой роутер (будет заменён в WindowGroup)
-        AIProviderRouter(providers: [])
-    }()
 }

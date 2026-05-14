@@ -300,104 +300,14 @@ function getStats() {
 }
 
 // ============================================================================
-// Express middleware helpers
+// NOTE: Express middleware/route handlers are NOT used here.
+// Admin API is handled directly in backend/index.js → handleAdminApi()
+// which calls isBlocked(), listBlocked(), unblockUser(), etc. directly.
+// This avoids an unnecessary dependency on Express.
 // ============================================================================
-
-/**
- * Middleware: проверяет, не заблокирован ли userId в запросе.
- * Если заблокирован — 403 с сообщением.
- */
-function checkBlockedMiddleware(req, res, next) {
-  try {
-    const userId = req.body && req.body.userId;
-    if (!userId || typeof userId !== 'string') {
-      return next();
-    }
-
-    const check = isBlocked(userId);
-    if (check.blocked) {
-      return res.status(403).json({
-        error: 'User temporarily blocked.',
-        blockedUntil: check.expiresAt,
-        reason: check.reason,
-      });
-    }
-    next();
-  } catch (e) {
-    console.error('Block check middleware error:', (e && e.message) || 'unknown');
-    next();
-  }
-}
-
-// ============================================================================
-// Express route handlers (to be mounted in index.js)
-// ============================================================================
-
-function createBlockedUsersRouter() {
-  const express = require('express');
-  const router = express.Router();
-
-  // List blocked users
-  router.get('/blocked-users', (req, res) => {
-    try {
-      const list = listBlocked();
-      res.json({
-        data: list,
-        total: list.length,
-        stats: getStats(),
-        generatedAt: nowIso(),
-      });
-    } catch (e) {
-      console.error('List blocked error:', (e && e.message) || 'unknown');
-      res.status(500).json({ error: 'Internal error' });
-    }
-  });
-
-  // Unblock user
-  router.delete('/blocked-users/:userId', (req, res) => {
-    try {
-      const userId = sanitizeUserId(req.params.userId);
-      if (!userId) {
-        return res.status(400).json({ error: 'Invalid userId' });
-      }
-      const result = unblockUser(userId);
-      if (!result.ok) {
-        return res.status(400).json({ error: result.error });
-      }
-      res.json(result);
-    } catch (e) {
-      console.error('Unblock error:', (e && e.message) || 'unknown');
-      res.status(500).json({ error: 'Internal error' });
-    }
-  });
-
-  // Stats only
-  router.get('/blocked-users/stats', (req, res) => {
-    try {
-      res.json(getStats());
-    } catch (e) {
-      console.error('Stats error:', (e && e.message) || 'unknown');
-      res.status(500).json({ error: 'Internal error' });
-    }
-  });
-
-  // Cleanup trigger (admin or cron)
-  router.post('/blocked-users/cleanup', (req, res) => {
-    try {
-      const result = cleanupExpired();
-      res.json(result);
-    } catch (e) {
-      console.error('Cleanup error:', (e && e.message) || 'unknown');
-      res.status(500).json({ error: 'Internal error' });
-    }
-  });
-
-  return router;
-}
 
 module.exports = {
   // Core
-  checkBlockedMiddleware,
   isBlocked,
   blockUser,
   unblockUser,
@@ -406,9 +316,6 @@ module.exports = {
   listBlocked,
   getStats,
   sanitizeUserId,
-
-  // Express
-  createBlockedUsersRouter,
 
   // Constants
   BAN_TTL_MS,
