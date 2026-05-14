@@ -146,6 +146,60 @@ Swift-код пишется и ревьюится в Polza IDE, компиляц
 
 ---
 
+## 🍎 Что нужно для Mac (при переезде)
+
+### Системные требования
+- **macOS** 14 Sonoma или новее
+- **Xcode** 16+
+- **Swift** 6.0
+- **Apple Developer Account** (для TestFlight / App Store)
+
+### Шаги при первом запуске на Mac
+
+```bash
+# 1. Клонировать репозиторий
+git clone https://github.com/irosssss/AIVibe2026.git
+cd AIVibe2026
+
+# 2. Запустить Xcode
+open AIVibe.xcodeproj
+
+# 3. Разрешить SPM (Xcode подтянет зависимости автоматически)
+#    Пакеты: swift-composable-architecture, YandexMobileMetrica, etc.
+
+# 4. Выбрать схему AIVibe → My Mac (или iOS Simulator 18+)
+# 5. Cmd+B — собрать
+# 6. Cmd+U — прогон тестов
+```
+
+### Что нужно дособрать на Mac (SES'и из DEEPSEEK_PROMPTS.md)
+
+| Сессия | Фича | Статус |
+|--------|------|--------|
+| **СЕССИЯ 5 — AIAdvisor** | SwiftUI чат с AI (фото + стили) | ⏳ Ожидает Mac |
+| **СЕССИЯ 5 — RoomScan** | RoomPlan 2 + LiDAR | ⏳ Ожидает Mac |
+| **СЕССИЯ 5 — ARDesigner** | RealityKit 4, расстановка мебели | ⏳ Ожидает Mac |
+| **СЕССИЯ 5 — Portfolio** | Публичные ссылки на AR | ⏳ Ожидает Mac |
+| **СЕССИЯ 5 — Marketplace** | Wildberries/Ozon/Sber | ⏳ Ожидает Mac |
+| **AppMetrica SDK** | Подключить реальный SDK (сейчас wrapper) | ⏳ После Xcode |
+| **Auth** | Sign in with Apple + Яндекс ID + VK ID | ⏳ После Xcode |
+
+### Чеклист при переезде
+
+- [ ] `open AIVibe.xcodeproj` — проект открывается без ошибок
+- [ ] `Cmd+B` — сборка успешна
+- [ ] `Cmd+U` — все тесты проходят (AIProviderRouterTests, минимум 10)
+- [ ] Подключить **AppMetrica SDK** через SPM
+- [ ] Реализовать **AIAdvisor Feature** — `SESSION_05_ai_advisor.md`
+- [ ] Реализовать **RoomScan** — `SESSION_05_room_scan.md`
+- [ ] Настроить Fastlane для CI/CD на GitHub Actions
+- [ ] Выкатить TestFlight beta
+
+> 💡 **Совет:** начни с AIAdvisor — это чисто SwiftUI, не требует физического устройства.
+> RoomScan и ARDesigner — только на реальном iPad/iPhone с LiDAR.
+
+---
+
 ## 📅 Roadmap
 
 | Неделя | Задача | Статус |
