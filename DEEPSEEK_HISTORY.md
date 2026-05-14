@@ -82,6 +82,36 @@
 | Июнь 2026 | Клонирован TailAdmin React v2.3.0 | ✅ |
 | Июнь 2026 | Установлены зависимости (`npm install`) | ✅ |
 | Июнь 2026 | Создан `admin/admin-panel/DEEPSEEK_HISTORY.md` | ✅ |
+| Июнь 2026 | Создан `admin/admin-panel/LAZYWEB_GUIDE.md` — Lazyweb MCP установка | ✅ |
+| Июнь 2026 | Сохранён Lazyweb токен в `~/.lazyweb/lazyweb_mcp_token` | ✅ |
+
+### Этап 7 — Prompt Injection Safety System
+
+| Дата | Действие | Этап | Статус |
+|------|----------|------|--------|
+| Июнь 2026 | Hotfix: обязательный App Token, валидация входных данных (prompt ≤ 10k, userId ≤ 64, imageBase64 ≤ 5MB), atomic rate limiter, log sanitization | 0 | ✅ |
+| Июнь 2026 | Создан `backend/promptGuard.js` — 3 уровня детекции инъекций (30+ regex, эвристики, скоринг severity 1–5) | 1 | ✅ |
+| Июнь 2026 | Создан `backend/blockedUsers.js` — persistent JSON-хранилище, strikes → 24h ban, auto-cleanup | 2 | ✅ |
+| Июнь 2026 | Интеграция в `backend/index.js`: path-based routing, admin API endpoints, guard pipeline, CORS для DELETE | 3 | ✅ |
+| Июнь 2026 | Создана страница `BlockedUsersPage.tsx` + `blockedUsersApi.ts` — таблица, статистика, разблокировка | 4 | ✅ |
+| Июнь 2026 | Исправление React 19 TS ошибок — 17 файлов: убран `React.FC`, замена на type-only пропсы | — | ✅ |
+
+### Архитектура безопасности
+
+```
+Пользователь → POST /api/analyze
+  ├─ 1. Валидация App Token
+  ├─ 2. Валидация входных данных (prompt/userId/imageBase64)
+  ├─ 3. Rate Limiter (20/min, atomic)
+  ├─ 4. Проверка блокировки (blockedUsers.isBlocked)
+  ├─ 5. Prompt Guard (severity ≥ 3 → strike + ban 24h)
+  └─ 6. Triplex Fallback → ответ
+
+Admin API endpoints:
+  GET    /api/blocked-users          — список заблокированных
+  GET    /api/blocked-users/stats    — статистика блокировок
+  DELETE /api/blocked-users/:userId  — разблокировать
+```
 
 ### ⏳ Ожидают Mac + Xcode
 
