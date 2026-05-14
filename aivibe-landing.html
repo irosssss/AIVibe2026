@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AIVibe — AR Дизайн Интерьеров</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── shadcn/ui CSS variables (Dark New York theme) ── */
+:root {
+  --background: #09090b;
+  --background-2: #111113;
+  --background-3: #18181b;
+  --foreground: #fafafa;
+  --card: #111113;
+  --card-border: #27272a;
+  --muted: #27272a;
+  --muted-fg: #71717a;
+  --border: #27272a;
+  --border-hover: #3f3f46;
+  --primary: #f97316;
+  --primary-glow: rgba(249,115,22,0.15);
+  --primary-dim: rgba(249,115,22,0.06);
+  --accent: #fbbf24;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--background);
+  color: var(--foreground);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── Noise texture overlay ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0.4;
+}
+
+/* ── Typography ── */
+.display { font-family: var(--font-display); }
+.mono { font-family: var(--font-mono); }
+
+/* ── Utilities ── */
+.container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; }
+.gap-4 { gap: 16px; }
+.gap-8 { gap: 32px; }
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s;
+}
+nav.scrolled {
+  background: rgba(9,9,11,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: var(--border);
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.nav-logo span { color: var(--primary); }
+.nav-links { display: flex; gap: 32px; list-style: none; }
+.nav-links a {
+  color: var(--muted-fg);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--foreground); }
+.nav-github {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--foreground);
+  color: var(--background);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  font-family: var(--font-display);
+  transition: opacity 0.2s;
+}
+.nav-github:hover { opacity: 0.85; }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 120px 24px 80px;
+  overflow: hidden;
+}
+
+/* Ambient orbs */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.2;
+  pointer-events: none;
+}
+.orb-1 {
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, #f97316, transparent 70%);
+  top: -100px; right: -150px;
+  animation: drift1 12s ease-in-out infinite;
+}
+.orb-2 {
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, #fbbf24, transparent 70%);
+  bottom: 0; left: -100px;
+  opacity: 0.12;
+  animation: drift2 15s ease-in-out infinite;
+}
+.orb-3 {
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, #c084fc, transparent 70%);
+  top: 40%; right: 30%;
+  opacity: 0.08;
+  animation: drift3 18s ease-in-out infinite;
+}
+@keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-30px,30px) scale(1.05)} }
+@keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(20px,-20px) scale(1.08)} }
+@keyframes drift3 { 0%,100%{transform:translate(0,0)} 33%{transform:translate(15px,-15px)} 66%{transform:translate(-10px,10px)} }
+
+/* Grid lines */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 2;
+  max-width: 1120px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 80px;
+  align-items: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--primary-dim);
+  border: 1px solid rgba(249,115,22,0.25);
+  border-radius: 100px;
+  padding: 5px 12px 5px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  margin-bottom: 28px;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+.hero-badge-dot {
+  width: 6px; height: 6px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(48px, 7vw, 88px);
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 0.92;
+  margin-bottom: 24px;
+}
+.hero-title-line2 {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255,255,255,0.3);
+}
+.hero-title em {
+  font-style: normal;
+  color: var(--primary);
+}
+
+.hero-sub {
+  font-size: 17px;
+  color: var(--muted-fg);
+  max-width: 480px;
+  margin-bottom: 40px;
+  font-weight: 300;
+  line-height: 1.7;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 56px;
+}
+.btn-primary {
+  background: var(--primary);
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s, transform 0.15s;
+}
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-outline {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.btn-outline:hover { border-color: var(--border-hover); background: var(--muted); }
+
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--muted-fg);
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+/* ── PHONE MOCKUP ── */
+.phone-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.phone {
+  width: 280px;
+  height: 580px;
+  background: var(--background-3);
+  border-radius: 44px;
+  border: 1.5px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 40px 80px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-16px)} }
+
+.phone-notch {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 28px;
+  background: var(--background);
+  border-radius: 20px;
+  z-index: 10;
+}
+
+/* Phone screen carousel */
+.phone-screens {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  transition: transform 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+.phone-screen {
+  min-width: 100%;
+  height: 100%;
+  padding: 60px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.screen-header {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.screen-sub {
+  font-size: 12px;
+  color: var(--muted-fg);
+  margin-bottom: 8px;
+}
+
+/* Screen 1: LiDAR scan */
+.lidar-grid {
+  flex: 1;
+  background: linear-gradient(135deg, #0d1117 0%, #101820 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(249,115,22,0.2);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lidar-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(249,115,22,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249,115,22,0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.lidar-dot {
+  width: 8px; height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 12px var(--primary);
+  position: absolute;
+  animation: lidar-scan 3s ease-in-out infinite;
+}
+@keyframes lidar-scan {
+  0%{top:20%;left:30%;opacity:1}
+  25%{top:50%;left:70%;opacity:0.8}
+  50%{top:70%;left:40%;opacity:1}
+  75%{top:30%;left:60%;opacity:0.9}
+  100%{top:20%;left:30%;opacity:1}
+}
+.lidar-scan-line {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  opacity: 0.5;
+  top: 50%;
+  animation: scan-line 2s ease-in-out infinite;
+}
+@keyframes scan-line { 0%,100%{top:10%;opacity:0.3} 50%{top:90%;opacity:0.6} }
+.lidar-label {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--primary);
+}
+
+.screen-stat-row {
+  display: flex;
+  gap: 8px;
+}
+.screen-stat {
+  flex: 1;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 11px;
+}
+.screen-stat-val {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.screen-stat-lbl { color: var(--muted-fg); font-size: 10px; margin-top: 2px; }
+
+/* Screen 2: AI Chat */
+.chat-bubble {
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 85%;
+}
+.chat-ai { background: var(--muted); border: 1px solid var(--border); align-self: flex-start; }
+.chat-user { background: var(--primary); color: #000; align-self: flex-end; font-weight: 500; }
+.chat-screen { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+
+/* Screen 3: Style picker */
+.style-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 1;
+}
+.style-card {
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 11px;
+}
+.style-card.active {
+  border-color: var(--primary);
+  background: var(--primary-dim);
+}
+.style-card-emoji { font-size: 22px; margin-bottom: 6px; }
+.style-card-name { font-family: var(--font-display); font-weight: 600; font-size: 12px; }
+.style-card-desc { color: var(--muted-fg); font-size: 10px; margin-top: 2px; }
+
+/* Phone dots */
+.phone-dots {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+.phone-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+.phone-dot.active { background: var(--primary); width: 20px; border-radius: 3px; }
+
+.phone-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 46px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(249,115,22,0.15), transparent 60%);
+  pointer-events: none;
+}
+
+/* ── SECTION BASE ── */
+section { padding: 100px 24px; }
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--primary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+.section-sub {
+  color: var(--muted-fg);
+  font-size: 16px;
+  font-weight: 300;
+  max-width: 520px;
+  line-height: 1.7;
+}
+
+/* ── FEATURES TICKER ── */
+.ticker-wrap {
+  background: var(--background-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  padding: 14px 0;
+}
+.ticker-track {
+  display: flex;
+  gap: 0;
+  animation: ticker 20s linear infinite;
+  width: max-content;
+}
+@keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 40px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-fg);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ticker-item span { color: var(--primary); font-size: 16px; }
+
+/* ── AI FALLBACK SECTION ── */
+.ai-section { background: var(--background); }
+.ai-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 60px;
+  position: relative;
+}
+.ai-provider {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  position: relative;
+  transition: border-color 0.3s;
+}
+.ai-provider:hover { border-color: var(--primary); }
+.ai-provider + .ai-provider { margin-left: -1px; border-radius: 0; }
+.ai-provider:first-child { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
+.ai-provider:last-child { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+.ai-provider-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-fg);
+  margin-bottom: 12px;
+  letter-spacing: 0.08em;
+}
+.ai-provider-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.ai-provider-sub { font-size: 13px; color: var(--muted-fg); margin-bottom: 16px; line-height: 1.5; }
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.ai-badge-primary { background: var(--primary-dim); color: var(--primary); border: 1px solid rgba(249,115,22,0.2); }
+.ai-badge-muted { background: var(--muted); color: var(--muted-fg); border: 1px solid var(--border); }
+.ai-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--muted-fg);
+  padding: 0 8px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+.circuit-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 32px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+}
+.circuit-icon {
+  width: 36px; height: 36px;
+  background: var(--primary-dim);
+  border: 1px solid rgba(249,115,22,0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.circuit-info h4 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.circuit-info p { font-size: 13px; color: var(--muted-fg); line-height: 1.5; }
+
+/* ── FEATURES GRID ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  margin-top: 60px;
+}
+.feature-card {
+  background: var(--card);
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+.feature-card:hover { background: var(--background-3); }
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.feature-card:hover::before { opacity: 1; }
+.feature-icon {
+  width: 44px; height: 44px;
+  background: var(--primary-dim);
+  border: 1px solid rgba(249,115,22,0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin-bottom: 20px;
+}
+.feature-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.feature-desc { font-size: 14px; color: var(--muted-fg); line-height: 1.65; }
+.feature-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.feature-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted-fg);
+}
+
+/* ── TECH STACK ── */
+.stack-section { background: var(--background-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.stack-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 48px;
+}
+.stack-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-fg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.stack-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(39,39,42,0.5);
+  font-size: 14px;
+  vertical-align: middle;
+}
+.stack-table tr:last-child td { border-bottom: none; }
+.stack-table tr:hover td { background: rgba(255,255,255,0.02); }
+.stack-layer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted-fg);
+}
+.stack-tech {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+.stack-desc { color: var(--muted-fg); font-size: 13px; }
+.stack-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.status-ready { background: rgba(34,197,94,0.08); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+.status-pending { background: var(--muted); color: var(--muted-fg); border: 1px solid var(--border); }
+
+/* ── ROADMAP ── */
+.roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  margin-top: 60px;
+}
+.roadmap-item {
+  background: var(--card);
+  padding: 28px 24px;
+}
+.roadmap-week {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-fg);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.roadmap-task {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.2px;
+}
+.roadmap-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+.dot-green { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; display: inline-block; }
+.dot-orange { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-fg); display: inline-block; }
+
+/* ── CTA BANNER ── */
+.cta-banner {
+  margin: 0 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 80px 60px;
+  text-align: center;
+  background: var(--background-2);
+  position: relative;
+  overflow: hidden;
+}
+.cta-banner::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px; height: 300px;
+  background: radial-gradient(ellipse, rgba(249,115,22,0.08), transparent 70%);
+  pointer-events: none;
+}
+.cta-banner h2 {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  margin-bottom: 16px;
+}
+.cta-banner p { color: var(--muted-fg); font-size: 16px; margin-bottom: 36px; }
+
+/* ── FOOTER ── */
+footer {
+  padding: 60px 24px 40px;
+  border-top: 1px solid var(--border);
+  margin-top: 80px;
+}
+.footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 48px;
+}
+.footer-brand h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+.footer-brand h3 span { color: var(--primary); }
+.footer-brand p { font-size: 13px; color: var(--muted-fg); line-height: 1.6; max-width: 260px; }
+.footer-col h4 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--foreground);
+}
+.footer-col ul { list-style: none; }
+.footer-col li { margin-bottom: 10px; }
+.footer-col a {
+  color: var(--muted-fg);
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+.footer-col a:hover { color: var(--foreground); }
+.footer-bottom {
+  max-width: 1120px;
+  margin: 40px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-bottom p { font-size: 12px; color: var(--muted-fg); }
+
+/* ── ANIMATIONS ── */
+.fade-in {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .hero-inner { grid-template-columns: 1fr; }
+  .phone-wrap { display: none; }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .roadmap-grid { grid-template-columns: 1fr 1fr; }
+  .footer-inner { grid-template-columns: 1fr; gap: 32px; }
+  .ai-flow { flex-direction: column; }
+  .ai-provider { border-radius: var(--radius-lg) !important; margin-left: 0 !important; margin-top: -1px; }
+  .ai-arrow { transform: rotate(90deg); }
+}
+@media (max-width: 600px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .roadmap-grid { grid-template-columns: 1fr; }
+  nav .nav-links { display: none; }
+  .cta-banner { padding: 48px 24px; }
+  .stack-table thead { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="navbar">
+  <a href="#" class="nav-logo">AI<span>Vibe</span></a>
+  <ul class="nav-links">
+    <li><a href="#features">Функции</a></li>
+    <li><a href="#ai">AI Engine</a></li>
+    <li><a href="#stack">Стек</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ul>
+  <a href="https://github.com/irosssss/AIVibe2026" target="_blank" class="nav-github">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+    GitHub
+  </a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <div class="hero-badge-dot"></div>
+        В активной разработке · iOS 18 · июнь 2026
+      </div>
+      <h1 class="hero-title display">
+        Дизайн<br>
+        интерьера.<br>
+        <span class="hero-title-line2"><em>Пере</em>осмыслен.</span>
+      </h1>
+      <p class="hero-sub">
+        Первое российское iOS-приложение, объединяющее LiDAR-сканирование, AR-дизайн и отечественный AI для трансформации вашего пространства.
+      </p>
+      <div class="hero-cta">
+        <a href="#features" class="btn-primary">
+          Смотреть демо
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="https://github.com/irosssss/AIVibe2026" target="_blank" class="btn-outline">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Репозиторий
+        </a>
+      </div>
+      <div class="hero-tags">
+        <span class="tag">iOS 18+</span>
+        <span class="tag">Swift 6</span>
+        <span class="tag">TCA</span>
+        <span class="tag">YandexGPT 5</span>
+        <span class="tag">RoomPlan 2</span>
+        <span class="tag">RealityKit 4</span>
+        <span class="tag">Yandex Cloud</span>
+      </div>
+    </div>
+
+    <!-- PHONE MOCKUP -->
+    <div class="phone-wrap">
+      <div class="phone-glow"></div>
+      <div class="phone" id="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screens" id="phoneScreens">
+
+          <!-- Screen 1: LiDAR -->
+          <div class="phone-screen">
+            <div class="screen-header display">Сканирование</div>
+            <div class="screen-sub">RoomPlan 2 · LiDAR активен</div>
+            <div class="lidar-grid">
+              <div class="lidar-scan-line"></div>
+              <div class="lidar-dot"></div>
+              <div class="lidar-label">LIDAR ACTIVE · 2.4m²</div>
+            </div>
+            <div class="screen-stat-row">
+              <div class="screen-stat">
+                <div class="screen-stat-val">98%</div>
+                <div class="screen-stat-lbl">Покрытие</div>
+              </div>
+              <div class="screen-stat">
+                <div class="screen-stat-val">24</div>
+                <div class="screen-stat-lbl">Объектов</div>
+              </div>
+              <div class="screen-stat">
+                <div class="screen-stat-val">±3мм</div>
+                <div class="screen-stat-lbl">Точность</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screen 2: AI Chat -->
+          <div class="phone-screen">
+            <div class="screen-header display">AI Советник</div>
+            <div class="screen-sub">YandexGPT 5 · онлайн</div>
+            <div class="chat-screen">
+              <div class="chat-bubble chat-ai">Отличная гостиная! Рекомендую скандинавский стиль — светлое дерево, белые стены, зелёные акценты 🌿</div>
+              <div class="chat-bubble chat-user">Какая мебель подойдёт?</div>
+              <div class="chat-bubble chat-ai">Диван IKEA KIVIK (~85 000 ₽ на WB), журнальный столик из массива, плетёные корзины для декора. Бюджет: 350–500 тыс. ₽</div>
+              <div class="chat-bubble chat-user">Покажи на WB!</div>
+            </div>
+          </div>
+
+          <!-- Screen 3: Style Picker -->
+          <div class="phone-screen">
+            <div class="screen-header display">Выбор стиля</div>
+            <div class="screen-sub">Для вашей гостиной · 18м²</div>
+            <div class="style-grid">
+              <div class="style-card active">
+                <div class="style-card-emoji">🌿</div>
+                <div class="style-card-name">Скандинав</div>
+                <div class="style-card-desc">Дерево, белый, свет</div>
+              </div>
+              <div class="style-card">
+                <div class="style-card-emoji">🏙</div>
+                <div class="style-card-name">Модерн</div>
+                <div class="style-card-desc">Чистые линии</div>
+              </div>
+              <div class="style-card">
+                <div class="style-card-emoji">🏭</div>
+                <div class="style-card-name">Лофт</div>
+                <div class="style-card-desc">Кирпич, металл</div>
+              </div>
+              <div class="style-card">
+                <div class="style-card-emoji">🏛</div>
+                <div class="style-card-name">Классика</div>
+                <div class="style-card-desc">Симметрия, лепнина</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="phone-dots" id="phoneDots">
+          <div class="phone-dot active" onclick="goToScreen(0)"></div>
+          <div class="phone-dot" onclick="goToScreen(1)"></div>
+          <div class="phone-dot" onclick="goToScreen(2)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-track">
+    <div class="ticker-item"><span>📡</span> LiDAR RoomPlan 2</div>
+    <div class="ticker-item"><span>🤖</span> YandexGPT 5 Pro</div>
+    <div class="ticker-item"><span>🪄</span> RealityKit 4 AR</div>
+    <div class="ticker-item"><span>🛒</span> Wildberries · Ozon</div>
+    <div class="ticker-item"><span>📵</span> Оффлайн CoreML</div>
+    <div class="ticker-item"><span>⚡</span> Circuit Breaker</div>
+    <div class="ticker-item"><span>🔐</span> Yandex Lockbox</div>
+    <div class="ticker-item"><span>🧪</span> 10 тестов</div>
+    <!-- duplicate for loop -->
+    <div class="ticker-item"><span>📡</span> LiDAR RoomPlan 2</div>
+    <div class="ticker-item"><span>🤖</span> YandexGPT 5 Pro</div>
+    <div class="ticker-item"><span>🪄</span> RealityKit 4 AR</div>
+    <div class="ticker-item"><span>🛒</span> Wildberries · Ozon</div>
+    <div class="ticker-item"><span>📵</span> Оффлайн CoreML</div>
+    <div class="ticker-item"><span>⚡</span> Circuit Breaker</div>
+    <div class="ticker-item"><span>🔐</span> Yandex Lockbox</div>
+    <div class="ticker-item"><span>🧪</span> 10 тестов</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features" style="background:var(--background-2);border-top:1px solid var(--border);">
+  <div class="container">
+    <div class="fade-in">
+      <div class="section-label">// возможности</div>
+      <h2 class="section-title display">Всё что нужно<br>для идеального <em style="color:var(--primary);font-style:normal">дизайна</em></h2>
+      <p class="section-sub">Мощный набор технологий, работающих вместе как единая система</p>
+    </div>
+    <div class="features-grid fade-in">
+      <div class="feature-card">
+        <div class="feature-icon">📡</div>
+        <div class="feature-name display">LiDAR Сканирование</div>
+        <div class="feature-desc">RoomPlan 2 создаёт точную 3D-модель комнаты с точностью ±3мм. Поддержка всех LiDAR-устройств iPhone. Автоматический экспорт в USDZ.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">RoomPlan 2</span>
+          <span class="feature-tag">USDZ</span>
+          <span class="feature-tag">ARKit</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <div class="feature-name display">Российский AI</div>
+        <div class="feature-desc">YandexGPT 5 Pro анализирует интерьер. GigaChat Ultra как резерв. Core ML оффлайн — работает без интернета. Triplex Fallback с Circuit Breaker.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">YandexGPT 5</span>
+          <span class="feature-tag">GigaChat</span>
+          <span class="feature-tag">Core ML</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🪄</div>
+        <div class="feature-name display">AR Дизайнер</div>
+        <div class="feature-desc">RealityKit 4 и RealityView. Расставляй мебель через камеру — drag & drop в реальном пространстве. Undo/Redo до 20 действий. Lighting estimation.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">RealityKit 4</span>
+          <span class="feature-tag">RealityView</span>
+          <span class="feature-tag">SwiftUI</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛒</div>
+        <div class="feature-name display">Маркетплейсы РФ</div>
+        <div class="feature-desc">Товары с Wildberries, Ozon и СберМегаМаркет прямо в приложении. AI подбирает мебель под ваш стиль и бюджет с прямыми ссылками.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">Wildberries</span>
+          <span class="feature-tag">Ozon</span>
+          <span class="feature-tag">СберМегаМаркет</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📵</div>
+        <div class="feature-name display">Оффлайн-режим</div>
+        <div class="feature-desc">Core ML работает полностью без сети. Базовые рекомендации по стилю и цветам доступны даже в подвале. Lazy загрузка модели при первом обращении.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">Core ML</span>
+          <span class="feature-tag">Offline</span>
+          <span class="feature-tag">On-device</span>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗂</div>
+        <div class="feature-name display">Портфолио</div>
+        <div class="feature-desc">Сохраняй AR-проекты с публичными ссылками. Yandex Object Storage для USDZ-файлов. Поделись с дизайнером или покажи строителям прямо с телефона.</div>
+        <div class="feature-tags">
+          <span class="feature-tag">Yandex Storage</span>
+          <span class="feature-tag">Share</span>
+          <span class="feature-tag">AR Links</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI ENGINE -->
+<section id="ai" class="ai-section">
+  <div class="container">
+    <div class="fade-in">
+      <div class="section-label">// ai engine</div>
+      <h2 class="section-title display">Triplex Fallback.<br><em style="color:var(--primary);font-style:normal">Всегда</em> на связи.</h2>
+      <p class="section-sub">Если один провайдер недоступен — система автоматически переключается на следующий. Без задержек, без ошибок для пользователя.</p>
+    </div>
+    <div class="ai-flow fade-in">
+      <div class="ai-provider">
+        <div class="ai-provider-num">01 / ОСНОВНОЙ</div>
+        <div class="ai-provider-name display">YandexGPT 5 Pro</div>
+        <div class="ai-provider-sub">Yandex Cloud Foundation Models.<br>Анализ фото, рекомендации стиля, подбор мебели.</div>
+        <span class="ai-badge ai-badge-primary">⚡ timeout 30с</span>
+      </div>
+      <div class="ai-arrow">→</div>
+      <div class="ai-provider">
+        <div class="ai-provider-num">02 / РЕЗЕРВ</div>
+        <div class="ai-provider-name display">GigaChat Ultra</div>
+        <div class="ai-provider-sub">Сбербанк AI. OAuth через backend-прокси.<br>Самоподписанный сертификат обработан.</div>
+        <span class="ai-badge ai-badge-primary">⚡ timeout 30с</span>
+      </div>
+      <div class="ai-arrow">→</div>
+      <div class="ai-provider">
+        <div class="ai-provider-num">03 / ОФФЛАЙН</div>
+        <div class="ai-provider-name display">Core ML</div>
+        <div class="ai-provider-sub">On-device модель. Работает без сети.<br>Template matching для базовых запросов.</div>
+        <span class="ai-badge ai-badge-muted">📵 offline only</span>
+      </div>
+    </div>
+    <div class="circuit-info fade-in">
+      <div class="circuit-icon">⚡</div>
+      <div>
+        <h4 class="display">Circuit Breaker Protection</h4>
+        <p>После 3 ошибок подряд провайдер автоматически пропускается на 5 минут. Health check каждые 60 секунд восстанавливает доступность. Реализован как Swift 6 <span class="mono" style="font-size:12px;background:var(--muted);padding:1px 5px;border-radius:3px">actor</span> — потокобезопасно.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack" class="stack-section">
+  <div class="container">
+    <div class="fade-in">
+      <div class="section-label">// tech stack</div>
+      <h2 class="section-title display">Выбор каждого<br>компонента <em style="color:var(--primary);font-style:normal">обоснован</em></h2>
+    </div>
+    <table class="stack-table fade-in">
+      <thead>
+        <tr>
+          <th>Слой</th>
+          <th>Технология</th>
+          <th>Почему</th>
+          <th>Статус</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="stack-layer">Платформа</span></td>
+          <td><span class="stack-tech display">iOS 18+ · Swift 6</span></td>
+          <td><span class="stack-desc">RealityView, строгий concurrency, actor isolation</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Архитектура</span></td>
+          <td><span class="stack-tech display">TCA 1.16</span></td>
+          <td><span class="stack-desc">The Composable Architecture — тестируемость, предсказуемость</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">AI основной</span></td>
+          <td><span class="stack-tech display">YandexGPT 5 Pro</span></td>
+          <td><span class="stack-desc">Лучший российский LLM, multimodal поддержка фото</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">AI резерв</span></td>
+          <td><span class="stack-tech display">GigaChat Ultra</span></td>
+          <td><span class="stack-desc">Fallback, российский регулятор, Сбербанк инфра</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">AR · 3D</span></td>
+          <td><span class="stack-tech display">RealityKit 4 · RoomPlan 2</span></td>
+          <td><span class="stack-desc">Нативный Apple AR, лучшая интеграция с LiDAR</span></td>
+          <td><span class="stack-status status-pending"><span class="dot-orange"></span>Mac needed</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Backend</span></td>
+          <td><span class="stack-tech display">Yandex Cloud Functions</span></td>
+          <td><span class="stack-desc">Node.js 20, serverless, хранение ключей в Lockbox</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">Аналитика</span></td>
+          <td><span class="stack-tech display">AppMetrica</span></td>
+          <td><span class="stack-desc">Российский аналог Firebase Analytics, GDPR-friendly</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+        <tr>
+          <td><span class="stack-layer">CI/CD</span></td>
+          <td><span class="stack-tech display">GitHub Actions + Fastlane</span></td>
+          <td><span class="stack-desc">macos-14 runner, SwiftLint → Build → Test → TestFlight</span></td>
+          <td><span class="stack-status status-ready"><span class="dot-green"></span>Ready</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap" style="background:var(--background);">
+  <div class="container">
+    <div class="fade-in">
+      <div class="section-label">// roadmap 2026</div>
+      <h2 class="section-title display">От идеи до<br><em style="color:var(--primary);font-style:normal">App Store</em> за 8 недель</h2>
+      <p class="section-sub">Разработка ведётся на Windows через Polza IDE. AR-фичи — после перехода на Mac.</p>
+    </div>
+    <div class="roadmap-grid fade-in">
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 01</div>
+        <div class="roadmap-task display">Структура проекта · CI/CD</div>
+        <div class="roadmap-status"><span class="dot-green"></span> <span style="color:#22c55e;font-size:12px">Готово</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 02</div>
+        <div class="roadmap-task display">AI Router · Providers</div>
+        <div class="roadmap-status"><span class="dot-green"></span> <span style="color:#22c55e;font-size:12px">Готово</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 03</div>
+        <div class="roadmap-task display">Backend · Network · Tests</div>
+        <div class="roadmap-status"><span class="dot-green"></span> <span style="color:#22c55e;font-size:12px">Готово</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 04</div>
+        <div class="roadmap-task display">RoomScan · LiDAR</div>
+        <div class="roadmap-status"><span class="dot-orange"></span> <span style="color:var(--muted-fg);font-size:12px">Mac нужен</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 05</div>
+        <div class="roadmap-task display">AR Designer · USDZ</div>
+        <div class="roadmap-status"><span class="dot-orange"></span> <span style="color:var(--muted-fg);font-size:12px">Mac нужен</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 06</div>
+        <div class="roadmap-task display">UI · Auth · AIAdvisor</div>
+        <div class="roadmap-status"><span class="dot-orange"></span> <span style="color:var(--muted-fg);font-size:12px">Mac нужен</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 07</div>
+        <div class="roadmap-task display">Marketplace Integration</div>
+        <div class="roadmap-status"><span class="dot-orange"></span> <span style="color:var(--muted-fg);font-size:12px">Mac нужен</span></div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-week">НЕДЕЛЯ 08</div>
+        <div class="roadmap-task display">TestFlight · App Store</div>
+        <div class="roadmap-status"><span class="dot-orange"></span> <span style="color:var(--muted-fg);font-size:12px">Финал</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-banner fade-in" style="margin:0 24px 80px;">
+  <h2 class="display">Присоединяйся к<br><em style="color:var(--primary);font-style:normal">AIVibe 2026</em></h2>
+  <p>Репозиторий открыт. Session-файлы помогут воспроизвести каждый шаг разработки.</p>
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+    <a href="https://github.com/irosssss/AIVibe2026" target="_blank" class="btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      Открыть GitHub
+    </a>
+    <a href="https://github.com/irosssss/AIVibe2026/blob/master/SESSION_01_init.md" target="_blank" class="btn-outline">
+      Читать SESSION_01 →
+    </a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <h3 class="display">AI<span>Vibe</span> 2026</h3>
+      <p>iOS-приложение для AR-дизайна интерьеров с российским AI. Swift 6 · TCA · YandexGPT.</p>
+    </div>
+    <div class="footer-col">
+      <h4 class="display">Документация</h4>
+      <ul>
+        <li><a href="https://github.com/irosssss/AIVibe2026/blob/master/README.md" target="_blank">README</a></li>
+        <li><a href="https://github.com/irosssss/AIVibe2026/blob/master/SESSION_01_init.md" target="_blank">SESSION 01 — Init</a></li>
+        <li><a href="https://github.com/irosssss/AIVibe2026/blob/master/SESSION_02_ai_router.md" target="_blank">SESSION 02 — AI Router</a></li>
+        <li><a href="https://github.com/irosssss/AIVibe2026/blob/master/SESSION_03_ar_roomscan.md" target="_blank">SESSION 03 — AR · RoomScan</a></li>
+        <li><a href="https://github.com/irosssss/AIVibe2026/blob/master/SESSION_04_backend.md" target="_blank">SESSION 04 — Backend</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4 class="display">Стек</h4>
+      <ul>
+        <li><a href="https://yandex.cloud/ru/services/foundation-models" target="_blank">YandexGPT 5 Pro</a></li>
+        <li><a href="https://developers.sber.ru/portal/products/gigachat" target="_blank">GigaChat Ultra</a></li>
+        <li><a href="https://github.com/pointfreeco/swift-composable-architecture" target="_blank">TCA Framework</a></li>
+        <li><a href="https://developer.apple.com/augmented-reality/roomplan/" target="_blank">RoomPlan 2</a></li>
+        <li><a href="https://yandex.cloud/ru/services/functions" target="_blank">Yandex Cloud Functions</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 AIVibe. Все права защищены.</p>
+    <p style="font-family:var(--font-mono);font-size:11px;">built with Swift 6 · Polza IDE · Yandex Cloud</p>
+  </div>
+</footer>
+
+<script>
+// NAV scroll
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 30);
+});
+
+// Phone carousel
+let currentScreen = 0;
+const totalScreens = 3;
+
+function goToScreen(idx) {
+  currentScreen = idx;
+  document.getElementById('phoneScreens').style.transform = `translateX(-${idx * 100}%)`;
+  document.querySelectorAll('.phone-dot').forEach((d,i) => {
+    d.classList.toggle('active', i === idx);
+  });
+}
+
+// Auto-advance phone screens
+setInterval(() => {
+  goToScreen((currentScreen + 1) % totalScreens);
+}, 3500);
+
+// Scroll animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-in').forEach((el, i) => {
+  el.style.transitionDelay = `${(i % 3) * 0.08}s`;
+  observer.observe(el);
+});
+</script>
+</body>
+</html>
