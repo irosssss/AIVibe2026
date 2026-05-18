@@ -185,4 +185,67 @@ AIVibe/
 
 ---
 
+### Этап 9 — Tool Registry (MVP Agent Blueprint §6)
+
+| Дата | Файл | Описание | Статус |
+|------|------|----------|--------|
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolDefinitions.swift` | Базовые типы: RiskClass, PermissionDecision, ToolError, ToolResult, AgentTool протокол, ToolInputSchema, ToolCallRequest | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/PermissionEngine.swift` | Permission Matrix Evaluator: allow/deny/approvalRequired/sandbox. SessionContext, UserRole, CustomPermissionRule | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ResultLimiter.swift` | ResultLimiter (max 8000 символов) + ResultTrimmer (сжатие старых результатов до 12000 суммарно) | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolScheduler.swift` | Планировщик: группировка по risk priority, разрешение зависимостей, параллельные/последовательные группы | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolRegistry.swift` | Центральный actor: регистрация, поиск, validate → permission → execute с таймаутом → limit. TCA Dependency | ✅ |
+
+### Сводка Tool Registry
+
+```text
+5 файлов, ~1500 строк Swift 6.
+
+Компоненты:
+  ToolRegistry (actor)         — центральный реестр, TCA Dependency
+  PermissionEngine (actor)     — permission matrix evaluator
+  ResultLimiter                — ограничение результата ≤ 8000 символов
+  ResultTrimmer                — сжатие старых результатов ≤ 12000 суммарно
+  ToolScheduler                — упорядочивание по risk priority + зависимости
+  AgentTool (protocol)         — протокол инструмента
+  ToolRiskClass (6 классов)    — readPublic, readPrivate, draft, action, financial, meta
+  PermissionDecision (4 решения) — allow, deny, approvalRequired, sandbox
+  ToolError (7 case-ов)        — toolNotFound, validationFailed, permissionDenied, ...
+  ToolResult                   — унифицированный результат
+  ToolCallRequest              — запрос на вызов (из model output)
+
+Permission matrix (BluePrint §12):
+  readPublic/readPrivate → allow
+  draft                  → allow
+  action                 → approval-gated
+  financial              → DENY (MVP v1)
+  internalState/meta     → allow
+
+Следующий шаг: domain-specific инструменты (analyze_room_scan, search_marketplace_furniture, recommend_style, generate_arrangement_plan, draft_shopping_list)
+```
+
+### Итоговая структура Core/AI
+
+```
+AIVibe/Core/AI/
+├── AIError.swift            ✅ (12 case-ов)
+├── AIProvider.swift         ✅ (протокол)
+├── AIModels.swift           ✅ (ChatMessage, AIPrompt, AIResponse)
+├── AIProviderHelpers.swift  ✅
+├── AIProviderRouter.swift   ✅ (actor, Triplex fallback, TCA Dependency)
+├── CircuitBreaker.swift     ✅ (actor)
+├── CircuitBreakerConfig.swift ✅
+├── Providers/
+│   ├── YandexGPTProvider.swift ✅
+│   ├── GigaChatProvider.swift  ✅
+│   └── CoreMLProvider.swift    ✅
+└── ToolRegistry/
+    ├── ToolDefinitions.swift   ✅ (типы, протокол)
+    ├── PermissionEngine.swift  ✅ (permission matrix)
+    ├── ResultLimiter.swift     ✅ (лимиты + trimmer)
+    ├── ToolScheduler.swift     ✅ (планировщик)
+    └── ToolRegistry.swift      ✅ (центральный actor)
+```
+
+---
+
 *Last updated: June 2026*
