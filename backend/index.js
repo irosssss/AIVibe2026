@@ -9,6 +9,7 @@ import { callGigaChat } from './shared/gigachat.js';
 import * as cache from './cache.js';
 import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
+import { CIRCUIT_THRESHOLD, CIRCUIT_COOLDOWN_MS, CIRCUIT_PROBE_MS, CIRCUIT_PROVIDERS } from './shared/circuit-config.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -21,9 +22,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
 // Реализует паттерн Circuit Breaker для каждого AI-провайдера.
 // CLOSED → OPEN (после threshold ошибок) → HALF_OPEN (после cooldown) → CLOSED/OPEN
 
-const CIRCUIT_THRESHOLD = 3;            // Ошибок до размыкания
-const CIRCUIT_COOLDOWN_MS = 5 * 60_000; // 5 минут в состоянии OPEN
-const CIRCUIT_PROBE_MS    = 60_000;     // Проверка здоровья в HALF_OPEN
+// Константы вынесены в shared/circuit-config.js — синхронизировать с iOS CircuitBreakerConfig.swift
 
 /**
  * @typedef {'CLOSED' | 'OPEN' | 'HALF_OPEN'} CircuitState
@@ -38,10 +37,9 @@ const CIRCUIT_PROBE_MS    = 60_000;     // Проверка здоровья в 
  */
 
 /** @type {Map<string, CircuitEntry>} */
-const circuitMap = new Map([
-    ['yandexgpt', createCircuit()],
-    ['gigachat',   createCircuit()],
-]);
+const circuitMap = new Map(
+    CIRCUIT_PROVIDERS.map(name => [name, createCircuit()])
+);
 
 /**
  * Создаёт новую запись Circuit Breaker в состоянии CLOSED.

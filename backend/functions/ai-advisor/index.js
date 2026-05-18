@@ -5,6 +5,78 @@
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { callGigaChat } from '../../shared/gigachat.js';
 import { getSecrets } from '../../shared/secrets.js';
+import { CIRCUIT_THRESHOLD, CIRCUIT_COOLDOWN_MS, CIRCUIT_PROVIDERS } from '../../shared/circuit-config.js';
+
+// ─── Circuit Breaker (shared config) ─────────────────────────────
+// Реализация на основе circuit-config.js для единообразия с backend/index.js
+
+/**
+ * @typedef {'CLOSED' | 'OPEN' | 'HALF_OPEN'} CircuitState
+ * @typedef {object} CircuitEntry
+ * @property {CircuitState} state
+ * @property {number} failures
+ * @property {number} lastFailureTime
+ * @property {number} lastSuccessTime
+ * @property {number} nextProbeTime
+ */
+
+/** @type {Map<string, CircuitEntry>} */
+const circuitMap = new Map(
+    CIRCUIT_PROVIDERS.map(name => [name, createCircuit()])
+);
+
+function createCircuit() {
+    const now = Date.now();
+    return {
+        state: 'CLOSED',
+        failures: 0,
+        lastFailureTime: 0,
+        lastSuccessTime: now,
+        nextProbeTime: now,
+    };
+}
+
+function circuitAllowed(provider) {
+    const c = circuitMap.get(provider);
+    if (!c) return { allowed: true, state: 'CLOSED' };
+    const now = Date.now();
+    switch (c.state) {
+        case 'CLOSED':
+            return { allowed: true, state: 'CLOSED' };
+        case 'OPEN':
+            if (now >= c.nextProbeTime) {
+                c.state = 'HALF_OPEN';
+                console.log(`[circuit] ${provider} -> HALF_OPEN (probe)`);
+                return { allowed: true, state: 'HALF_OPEN' };
+            }
+            return { allowed: false, state: 'OPEN' };
+        case 'HALF_OPEN':
+            return { allowed: true, state: 'HALF_OPEN' };
+        default:
+            return { allowed: true, state: 'CLOSED' };
+    }
+}
+
+function circuitSuccess(provider) {
+    const c = circuitMap.get(provider);
+    if (!c) return;
+    c.state = 'CLOSED';
+    c.failures = 0;
+    c.lastSuccessTime = Date.now();
+}
+
+function circuitFailure(provider, err) {
+    const c = circuitMap.get(provider);
+    if (!c) return;
+    c.failures++;
+    c.lastFailureTime = Date.now();
+    if (c.state === 'HALF_OPEN' || c.failures >= CIRCUIT_THRESHOLD) {
+        c.state = 'OPEN';
+        c.nextProbeTime = Date.now() + CIRCUIT_COOLDOWN_MS;
+        console.warn(`[circuit] ${provider} -> OPEN (${c.failures} failures, cooldown ${CIRCUIT_COOLDOWN_MS / 1000}s)`,
+            err ? { error: String(err.message).slice(0, 120) } : undefined);
+    }
+}
 
 // In-memory rate limit store: { userId: { count, resetAt } }
 const rateLimitStore = new Map();
@@ -103,32 +175,54 @@ export const handler = async (event, context) => {
         let text = '';
         let errorLog = [];
 
-        // --- 4. Try YandexGPT (25s timeout) ---
-        try {
-            const result = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
-            text = result.text;
-            provider = 'yandexgpt';
-        } catch (err) {
-            errorLog.push({ provider: 'yandexgpt', error: err.message });
-            console.warn('YandexGPT failed, trying GigaChat:', err.message);
+        // --- 4. Triplex Fallback с Circuit Breaker (shared config) ---
 
-            // --- 5. Fallback → GigaChat (25s timeout) ---
+        // Попытка 1: YandexGPT
+        const yandexCB = circuitAllowed('yandexgpt');
+        if (yandexCB.allowed) {
             try {
-                const result = await callGigaChat({ prompt, timeoutMs: 25000 });
+                const result = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
                 text = result.text;
-                provider = 'gigachat';
-            } catch (err2) {
-                errorLog.push({ provider: 'gigachat', error: err2.message });
-                console.warn('GigaChat failed, using cache:', err2.message);
+                provider = 'yandexgpt';
+                circuitSuccess('yandexgpt');
+            } catch (err) {
+                circuitFailure('yandexgpt', err);
+                errorLog.push({ provider: 'yandexgpt', error: err.message });
+                console.warn('YandexGPT failed:', err.message);
+            }
+        } else {
+            errorLog.push({ provider: 'yandexgpt', error: `skipped (CB: ${yandexCB.state})` });
+            console.warn('YandexGPT skipped by Circuit Breaker');
+        }
 
-                // --- 6. Fallback → Cache ---
-                const cached = getCachedResponse(prompt);
-                if (cached) {
-                    text = cached;
-                    provider = 'cache';
-                } else {
-                    throw new Error('All providers failed and no cached response available');
+        // Попытка 2: GigaChat
+        if (!text) {
+            const gigaCB = circuitAllowed('gigachat');
+            if (gigaCB.allowed) {
+                try {
+                    const result = await callGigaChat({ prompt, timeoutMs: 25000 });
+                    text = result.text;
+                    provider = 'gigachat';
+                    circuitSuccess('gigachat');
+                } catch (err) {
+                    circuitFailure('gigachat', err);
+                    errorLog.push({ provider: 'gigachat', error: err.message });
+                    console.warn('GigaChat failed:', err.message);
                 }
+            } else {
+                errorLog.push({ provider: 'gigachat', error: `skipped (CB: ${gigaCB.state})` });
+                console.warn('GigaChat skipped by Circuit Breaker');
+            }
+        }
+
+        // Попытка 3: Cache (без Circuit Breaker)
+        if (!text) {
+            const cached = getCachedResponse(prompt);
+            if (cached) {
+                text = cached;
+                provider = 'cache';
+            } else {
+                throw new Error('All providers failed and no cached response available');
             }
         }
 

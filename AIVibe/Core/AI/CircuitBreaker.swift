@@ -3,6 +3,7 @@
 // Circuit Breaker паттерн для AI-провайдеров.
 // Один экземпляр = один провайдер.
 // Если провайдер падает threshold раз подряд — отключается на timeout секунд.
+// Конфигурация вынесена в CircuitBreakerConfig — с��нхронизируется с backend/shared/circuit-config.js
 
 import Foundation
 import Logging
@@ -35,9 +36,11 @@ public actor CircuitBreaker {
 
     // MARK: - Init
 
+    /// Конфигурация по умолчанию берётся из CircuitBreakerConfig.shared.
+    /// При необходимости можно передать кастомные значения (например, для тестов).
     public init(
-        threshold: Int = 3,
-        timeout: TimeInterval = 300 // 5 минут
+        threshold: Int = CircuitBreakerConfig.shared.threshold,
+        timeout: TimeInterval = CircuitBreakerConfig.shared.timeout
     ) {
         self.threshold = threshold
         self.timeout = timeout
