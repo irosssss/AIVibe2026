@@ -9,7 +9,7 @@ import { callGigaChat } from './shared/gigachat.js';
 import * as cache from './cache.js';
 import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
-import { CIRCUIT_THRESHOLD, CIRCUIT_COOLDOWN_MS, CIRCUIT_PROBE_MS, CIRCUIT_PROVIDERS } from './shared/circuit-config.js';
+import { CircuitBreaker } from './shared/circuit-breaker.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -19,147 +19,11 @@ const APP_TOKEN_HEADER = 'x-app-token';
 const REQUEST_ID_HEADER = 'x-request-id';
 
 // ─── Circuit Breaker ─────────────────────────────────────────────
-// Реализует паттерн Circuit Breaker для каждого AI-провайдера.
-// CLOSED → OPEN (после threshold ошибок) → HALF_OPEN (после cooldown) → CLOSED/OPEN
+// Реализация вынесена в shared/circuit-breaker.js
+// Константы (threshold, cooldown) — из shared/circuit-config.js
+// Синхронизировать с iOS: AIVibe/Core/AI/CircuitBreakerConfig.swift
 
-// Константы вынесены в shared/circuit-config.js — синхронизировать с iOS CircuitBreakerConfig.swift
-
-/**
- * @typedef {'CLOSED' | 'OPEN' | 'HALF_OPEN'} CircuitState
- * @typedef {object} CircuitEntry
- * @property {CircuitState} state
- * @property {number} failures
- * @property {number} lastFailureTime
- * @property {number} lastSuccessTime
- * @property {number} nextProbeTime
- * @property {number} totalFailures
- * @property {number} totalSuccesses
- */
-
-/** @type {Map<string, CircuitEntry>} */
-const circuitMap = new Map(
-    CIRCUIT_PROVIDERS.map(name => [name, createCircuit()])
-);
-
-/**
- * Создаёт новую запись Circuit Breaker в состоянии CLOSED.
- * @returns {CircuitEntry}
- */
-function createCircuit() {
-    const now = Date.now();
-    return {
-        state: 'CLOSED',
-        failures: 0,
-        lastFailureTime: 0,
-        lastSuccessTime: now,
-        nextProbeTime: now,
-        totalFailures: 0,
-        totalSuccesses: 0,
-    };
-}
-
-/**
- * Проверяет, разрешён ли запрос к провайдеру по состоянию Circuit Breaker.
- * В HALF_OPEN разрешает один пробный запрос (probe).
- *
- * @param {string} provider
- * @returns {{ allowed: boolean, state: CircuitState }}
- */
-function circuitAllowed(provider) {
-    const c = circuitMap.get(provider);
-    if (!c) return { allowed: true, state: 'CLOSED' };
-
-    const now = Date.now();
-
-    switch (c.state) {
-        case 'CLOSED':
-            return { allowed: true, state: 'CLOSED' };
-
-        case 'OPEN':
-            if (now >= c.nextProbeTime) {
-                c.state = 'HALF_OPEN';
-                console.log(`[circuit] ${provider} -> HALF_OPEN (probe)`);
-                return { allowed: true, state: 'HALF_OPEN' };
-            }
-            return { allowed: false, state: 'OPEN' };
-
-        case 'HALF_OPEN':
-            return { allowed: true, state: 'HALF_OPEN' };
-
-        default:
-            return { allowed: true, state: 'CLOSED' };
-    }
-}
-
-/**
- * Сообщает Circuit Breaker об успехе запроса. Переводит -> CLOSED.
- * @param {string} provider
- */
-function circuitSuccess(provider) {
-    const c = circuitMap.get(provider);
-    if (!c) return;
-
-    const wasOpen = c.state !== 'CLOSED';
-    c.failures = 0;
-    c.lastSuccessTime = Date.now();
-    c.totalSuccesses++;
-    c.state = 'CLOSED';
-
-    if (wasOpen) {
-        console.log(`[circuit] ${provider} -> CLOSED (recovered after ${c.totalFailures} total failures)`);
-    }
-}
-
-/**
- * Сообщает Circuit Breaker об ошибке. При достижении threshold -> OPEN с cooldown.
- * @param {string} provider
- * @param {Error} [err]
- */
-function circuitFailure(provider, err) {
-    const c = circuitMap.get(provider);
-    if (!c) return;
-
-    c.failures++;
-    c.totalFailures++;
-    c.lastFailureTime = Date.now();
-
-    if (c.state === 'HALF_OPEN') {
-        c.state = 'OPEN';
-        c.nextProbeTime = Date.now() + CIRCUIT_COOLDOWN_MS;
-        console.warn(`[circuit] ${provider} -> OPEN (probe failed, next probe in ${CIRCUIT_COOLDOWN_MS / 1000}s)`, {
-            error: err ? String(err.message).slice(0, 120) : undefined
-        });
-        return;
-    }
-
-    if (c.failures >= CIRCUIT_THRESHOLD) {
-        c.state = 'OPEN';
-        c.nextProbeTime = Date.now() + CIRCUIT_COOLDOWN_MS;
-        console.warn(`[circuit] ${provider} -> OPEN (${c.failures} consecutive failures, cooldown ${CIRCUIT_COOLDOWN_MS / 1000}s)`, {
-            error: err ? String(err.message).slice(0, 120) : undefined
-        });
-    }
-}
-
-/**
- * Возвращает статус всех Circuit Breakers для health check / admin API.
- * @returns {Record<string, object>}
- */
-function circuitStatusAll() {
-    /** @type {Record<string, object>} */
-    const status = {};
-    for (const [name, c] of circuitMap) {
-        status[name] = {
-            state: c.state,
-            failures: c.failures,
-            totalFailures: c.totalFailures,
-            totalSuccesses: c.totalSuccesses,
-            lastFailureMsAgo: c.lastFailureTime ? Date.now() - c.lastFailureTime : null,
-            nextProbeMs: c.state === 'OPEN' ? Math.max(0, c.nextProbeTime - Date.now()) : null,
-        };
-    }
-    return status;
-}
+const circuitBreaker = new CircuitBreaker();
 
 // ─── Rate Limiter (in-memory) ────────────────────────────────────
 
@@ -239,7 +103,7 @@ export const handler = async (event, context) => {
             requestId,
             timestamp: new Date().toISOString(),
             rateLimit: { max: RATE_LIMIT_PER_MINUTE, windowMs: RATE_WINDOW_MS },
-            circuitBreaker: circuitStatusAll(),
+            circuitBreaker: circuitBreaker.statusAll(),
             blockedUsers: blockedUsers.getStats(),
             cache: cache.stats ? cache.stats() : null,
             version: '2.0',
@@ -359,17 +223,17 @@ export const handler = async (event, context) => {
     let circuitSkipped = null; // какой провайдер был пропущен CB
 
     // Попытка 1: YandexGPT
-    const yandexCB = circuitAllowed('yandexgpt');
+    const yandexCB = circuitBreaker.allowed('yandexgpt');
     if (yandexCB.allowed) {
         try {
             const yandexStart = Date.now();
             text = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
             latencyMs = Date.now() - yandexStart;
             provider = 'yandexgpt';
-            circuitSuccess('yandexgpt');
+            circuitBreaker.success('yandexgpt');
             log('info', 'YandexGPT success', { provider, latencyMs });
         } catch (err) {
-            circuitFailure('yandexgpt', err);
+            circuitBreaker.failure('yandexgpt', err);
             log('warn', 'YandexGPT failed', { error: String(err.message).slice(0, 120) });
         }
     } else {
@@ -379,17 +243,17 @@ export const handler = async (event, context) => {
 
     // Попытка 2: GigaChat
     if (!text) {
-        const gigaCB = circuitAllowed('gigachat');
+        const gigaCB = circuitBreaker.allowed('gigachat');
         if (gigaCB.allowed) {
             try {
                 const gigaStart = Date.now();
                 text = await callGigaChat({ prompt, timeoutMs: 25000 });
                 latencyMs = Date.now() - gigaStart;
                 provider = 'gigachat';
-                circuitSuccess('gigachat');
+                circuitBreaker.success('gigachat');
                 log('info', 'GigaChat success', { provider, latencyMs });
             } catch (err) {
-                circuitFailure('gigachat', err);
+                circuitBreaker.failure('gigachat', err);
                 log('warn', 'GigaChat failed', { error: String(err.message).slice(0, 120) });
             }
         } else {
@@ -475,7 +339,7 @@ function handleAdminApi(event, path, method, requestId) {
             timestamp: new Date().toISOString(),
             blockedUsers: stats,
             rateLimit: { max: RATE_LIMIT_PER_MINUTE, windowMs: RATE_WINDOW_MS },
-            circuitBreaker: circuitStatusAll(),
+            circuitBreaker: circuitBreaker.statusAll(),
             cache: cache.stats ? cache.stats() : null,
             version: '2.0',
             _note: 'admin endpoint — extended view'
@@ -521,14 +385,12 @@ function handleAdminApi(event, path, method, requestId) {
 
     // Circuit Breaker: get status (GET) or reset (POST)
     if (path === '/circuit' && method === 'GET') {
-        return jsonResponse(200, { data: circuitStatusAll(), generatedAt: new Date().toISOString() });
+        return jsonResponse(200, { data: circuitBreaker.statusAll(), generatedAt: new Date().toISOString() });
     }
     if (path === '/circuit/reset' && method === 'POST') {
-        for (const [name] of circuitMap) {
-            circuitMap.set(name, createCircuit());
-        }
+        circuitBreaker.resetAll();
         console.log('[admin] Circuit Breakers reset', { requestId: requestId?.slice(0, 8) });
-        return jsonResponse(200, { ok: true, message: 'Circuit breakers reset to CLOSED', data: circuitStatusAll() });
+        return jsonResponse(200, { ok: true, message: 'Circuit breakers reset to CLOSED', data: circuitBreaker.statusAll() });
     }
 
     return jsonResponse(404, { error: 'Admin endpoint not found' });

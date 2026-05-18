@@ -1,5 +1,5 @@
 # Code Complexity Report
-Generated: 2026-05-18T12:51:37.606Z
+Generated: 2026-05-18T13:27:43.101Z
 
 ## Summary
 
@@ -10,5 +10,5 @@ Generated: 2026-05-18T12:51:37.606Z
 | Dual backend entry points | ⚠️ WARN |
 | RAG indexer serial N+1 | ⚠️ WARN |
 | RAG search full scan | ✅ OK |
-| Analytics event loss | ⚠️ WARN |
-| Retry-After handling | ⚠️ WARN |
+| Analytics event loss | ✅ OK |
+| Retry-After handling | ✅ OK |

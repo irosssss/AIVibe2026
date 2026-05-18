@@ -128,7 +128,9 @@ public final class NetworkClient: @unchecked Sendable {
         case 401:
             throw AIError.authenticationFailed(provider: "NetworkClient")
         case 429:
-            throw AIError.rateLimitExceeded(provider: "NetworkClient", retryAfter: nil)
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                .flatMap(TimeInterval.init)
+            throw AIError.rateLimitExceeded(provider: "NetworkClient", retryAfter: retryAfter)
         case 500..<600:
             throw AIError.networkError(statusCode: httpResponse.statusCode, message: "Server error")
         default:

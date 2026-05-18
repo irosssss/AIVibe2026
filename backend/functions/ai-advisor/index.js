@@ -5,78 +5,13 @@
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { callGigaChat } from '../../shared/gigachat.js';
 import { getSecrets } from '../../shared/secrets.js';
-import { CIRCUIT_THRESHOLD, CIRCUIT_COOLDOWN_MS, CIRCUIT_PROVIDERS } from '../../shared/circuit-config.js';
+import { CircuitBreaker } from '../../shared/circuit-breaker.js';
 
-// ─── Circuit Breaker (shared config) ─────────────────────────────
-// Реализация на основе circuit-config.js для единообразия с backend/index.js
+// ─── Circuit Breaker (shared implementation) ─────────────────────
+// Единая реализация из shared/circuit-breaker.js
+// Константы (threshold, cooldown) — из shared/circuit-config.js
 
-/**
- * @typedef {'CLOSED' | 'OPEN' | 'HALF_OPEN'} CircuitState
- * @typedef {object} CircuitEntry
- * @property {CircuitState} state
- * @property {number} failures
- * @property {number} lastFailureTime
- * @property {number} lastSuccessTime
- * @property {number} nextProbeTime
- */
-
-/** @type {Map<string, CircuitEntry>} */
-const circuitMap = new Map(
-    CIRCUIT_PROVIDERS.map(name => [name, createCircuit()])
-);
-
-function createCircuit() {
-    const now = Date.now();
-    return {
-        state: 'CLOSED',
-        failures: 0,
-        lastFailureTime: 0,
-        lastSuccessTime: now,
-        nextProbeTime: now,
-    };
-}
-
-function circuitAllowed(provider) {
-    const c = circuitMap.get(provider);
-    if (!c) return { allowed: true, state: 'CLOSED' };
-    const now = Date.now();
-    switch (c.state) {
-        case 'CLOSED':
-            return { allowed: true, state: 'CLOSED' };
-        case 'OPEN':
-            if (now >= c.nextProbeTime) {
-                c.state = 'HALF_OPEN';
-                console.log(`[circuit] ${provider} -> HALF_OPEN (probe)`);
-                return { allowed: true, state: 'HALF_OPEN' };
-            }
-            return { allowed: false, state: 'OPEN' };
-        case 'HALF_OPEN':
-            return { allowed: true, state: 'HALF_OPEN' };
-        default:
-            return { allowed: true, state: 'CLOSED' };
-    }
-}
-
-function circuitSuccess(provider) {
-    const c = circuitMap.get(provider);
-    if (!c) return;
-    c.state = 'CLOSED';
-    c.failures = 0;
-    c.lastSuccessTime = Date.now();
-}
-
-function circuitFailure(provider, err) {
-    const c = circuitMap.get(provider);
-    if (!c) return;
-    c.failures++;
-    c.lastFailureTime = Date.now();
-    if (c.state === 'HALF_OPEN' || c.failures >= CIRCUIT_THRESHOLD) {
-        c.state = 'OPEN';
-        c.nextProbeTime = Date.now() + CIRCUIT_COOLDOWN_MS;
-        console.warn(`[circuit] ${provider} -> OPEN (${c.failures} failures, cooldown ${CIRCUIT_COOLDOWN_MS / 1000}s)`,
-            err ? { error: String(err.message).slice(0, 120) } : undefined);
-    }
-}
+const circuitBreaker = new CircuitBreaker();
 
 // In-memory rate limit store: { userId: { count, resetAt } }
 const rateLimitStore = new Map();
@@ -178,15 +113,15 @@ export const handler = async (event, context) => {
         // --- 4. Triplex Fallback с Circuit Breaker (shared config) ---
 
         // Попытка 1: YandexGPT
-        const yandexCB = circuitAllowed('yandexgpt');
+        const yandexCB = circuitBreaker.allowed('yandexgpt');
         if (yandexCB.allowed) {
             try {
                 const result = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
                 text = result.text;
                 provider = 'yandexgpt';
-                circuitSuccess('yandexgpt');
+                circuitBreaker.success('yandexgpt');
             } catch (err) {
-                circuitFailure('yandexgpt', err);
+                circuitBreaker.failure('yandexgpt', err);
                 errorLog.push({ provider: 'yandexgpt', error: err.message });
                 console.warn('YandexGPT failed:', err.message);
             }
@@ -197,15 +132,15 @@ export const handler = async (event, context) => {
 
         // Попытка 2: GigaChat
         if (!text) {
-            const gigaCB = circuitAllowed('gigachat');
+            const gigaCB = circuitBreaker.allowed('gigachat');
             if (gigaCB.allowed) {
                 try {
                     const result = await callGigaChat({ prompt, timeoutMs: 25000 });
                     text = result.text;
                     provider = 'gigachat';
-                    circuitSuccess('gigachat');
+                    circuitBreaker.success('gigachat');
                 } catch (err) {
-                    circuitFailure('gigachat', err);
+                    circuitBreaker.failure('gigachat', err);
                     errorLog.push({ provider: 'gigachat', error: err.message });
                     console.warn('GigaChat failed:', err.message);
                 }

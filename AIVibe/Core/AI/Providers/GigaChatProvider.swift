@@ -155,7 +155,9 @@ public final class GigaChatProvider: AIProviderProtocol, Sendable {
             await tokenStore.invalidate()
             throw AIError.authenticationFailed(provider: name)
         case 429:
-            throw AIError.rateLimitExceeded(provider: name, retryAfter: nil)
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                .flatMap(TimeInterval.init)
+            throw AIError.rateLimitExceeded(provider: name, retryAfter: retryAfter)
         case 500...599:
             throw AIError.networkError(statusCode: httpResponse.statusCode, message: "Server error")
         default:

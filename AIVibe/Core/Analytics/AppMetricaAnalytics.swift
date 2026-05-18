@@ -13,6 +13,7 @@ enum AnalyticsEvent {
     case arObjectPlaced(objectType: String)
     case marketplaceItemTapped(store: String, price: Int)
     case portfolioItemViewed
+    case genericEvent(String, params: [String: any Sendable])
 }
 
 // MARK: - Analytics Protocol
@@ -42,7 +43,7 @@ final class AppMetricaAnalytics: AnalyticsProtocol {
 
 extension AppMetricaAnalytics: AnalyticsLogging {
     func log(event: String, params: [String: any Sendable]) {
-        track(event: .aiRequestSent(provider: event)) // упрощённое логирование
+        track(event: .genericEvent(event, params: params))
         logger.info("Track: \(event) — \(params)")
     }
 }
