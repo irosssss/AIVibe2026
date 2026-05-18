@@ -304,4 +304,106 @@ draft_shopping_list ✅ (confirm_purchase_order — DENY в MVP)
 
 ---
 
+---
+
+### Этап 11 — Core Agentic Loop (Blueprint §4, §5, §7, §8, §9)
+
+| Дата | Файл | Описание | Статус |
+|------|------|----------|--------|
+| Июнь 2026 | `AIVibe/Core/AI/Agent/AgentSession.swift` | Session state: AgentSession actor — события, планы, goal state, todo, approval records, skills, connectors, artifacts, compaction summaries, provider health. SessionEvent (10 типов), DesignPlan (Plan Artifact), GoalState (checkpoints + progress), TodoItem, ApprovalRecord, ConnectorStatus, SessionArtifact, CompactionSummary, ProviderHealth. Blueprint §9 | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Agent/ContextBuilder.swift` | Context Builder: 11 секций (trust boundary) — system instructions → harness policy → domain policy → active plan → skill index → tool definitions → LiDAR scan data → marketplace data → style guides → tool observations → user request. AgentContext, ContextSection (trusted/data). SkillIndex (3 skills: design_advisor, furniture_matcher, budget_optimizer). Blueprint §5, §10 | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Agent/AgentLoop.swift` | Core Agentic Loop: run() — главный цикл (maxSteps=8), generateModelOutput (Triplex Fallback), parseModelOutput (JSON/Markdown/plain text). runGoalLoop() — long-running задачи с checkpoints. shouldActivatePlanningMode() — активация planning mode (бюджет >500k, комната >30м², нет стиля, vague запросы). SessionCompactor — auto-compaction при 80% заполнении контекста. AgentLoopResult (5 case-ов), UserRequest (3 input types). RoomAnalysis placeholder. Blueprint §4, §7, §8 | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolRegistry.swift` | Добавлен AgentLoop TCA Dependency (liveValue/testValue/previewValue — все с registerDomainTools). Blueprint §4 | ✅ |
+
+### Сводка Stage 3
+
+```text
+3 файла, ~65KB Swift 6.
+
+AgentLoop (actor)                    — главный цикл агента
+├── run(request, session)           — основной цикл (до 8 шагов)
+├── generateModelOutput()           — Triplex Fallback (YandexGPT → GigaChat → CoreML)
+├── parseModelOutput()              — парсинг ответа (JSON/Markdown/plain)
+├── runGoalLoop(objective, checks)  — goal-like loop с checkpoints
+├── shouldActivatePlanningMode()    — детектор planning mode
+└── SessionCompactor                — auto-compaction (80% порог)
+
+ContextBuilder                       — сборка контекста
+├── 11 секций (trust boundary)     — TRUSTED vs DATA
+├── build() → AgentContext          — полная сборка
+├── needsCompaction()               — проверка 80% порога
+└── SkillIndex                      — индекс скиллов
+
+AgentSession (actor)                 — состояние сессии
+├── events, activePlan, goalState   — durable state
+├── todoList, approvalRecords       — задачи и одобрения
+├── artifacts, compactionSummaries  — артефакты + compaction
+└── providerHealth                  — мониторинг провайдеров
+```
+
+### Blueprint coverage — Core Agentic Loop
+
+```
+Blueprint §4 (Core loop):
+  run_aivibe_agent()           ✅
+  context_builder.build()      ✅
+  model.generate()             ✅ (Triplex Fallback)
+  tool_registry.visibleTools() ✅
+  scheduler.order()            ✅
+  permissions.evaluate()       ✅
+  result_limiter.enforce()     ✅
+  max_steps = 8                ✅
+  Provider fallback в цикле    ✅
+
+Blueprint §5 (Context):
+  11 секций сборки             ✅
+  Trust boundary (TRUSTED/DATA) ✅
+  Skill index                  ✅
+
+Blueprint §7 (Planning):
+  Planning mode triggers       ✅
+  Plan artifact                ✅
+
+Blueprint §8 (Goal-like):
+  GoalState + checkpoints      ✅
+  runGoalLoop()               ✅
+
+Blueprint §9 (Memory):
+  Auto-compaction (80%)        ✅
+  Compaction summary           ✅
+  Durable state                ✅
+```
+
+### Итоговая структура Core/AI
+
+```
+AIVibe/Core/AI/
+├── AIError.swift                    ✅
+├── AIProvider.swift                 ✅
+├── AIModels.swift                   ✅
+├── AIProviderHelpers.swift          ✅
+├── AIProviderRouter.swift           ✅ (actor, Triplex fallback)
+├── CircuitBreaker.swift             ✅ (actor)
+├── CircuitBreakerConfig.swift       ✅
+├── Providers/
+│   ├── YandexGPTProvider.swift      ✅
+│   ├── GigaChatProvider.swift       ✅
+│   └── CoreMLProvider.swift         ✅
+├── ToolRegistry/                    ← 10 файлов
+│   ├── ToolDefinitions.swift        ✅
+│   ├── PermissionEngine.swift       ✅
+│   ├── ResultLimiter.swift          ✅
+│   ├── ToolScheduler.swift          ✅
+│   ├── ToolRegistry.swift           ✅
+│   └── Tools/ (5 domain tools)      ✅
+└── Agent/                           ← NEW (Stage 3)
+    ├── AgentSession.swift            ✅ (16.9KB)
+    ├── ContextBuilder.swift          ✅ (19.7KB)
+    └── AgentLoop.swift               ✅ (24.8KB)
+```
+
+**Следующий этап:** Observability + Evals (Blueprint §13) — tracing, metrics, 8 eval probes, Circuit Breaker monitoring. Или Tests для AgentLoop.
+
+---
+
 *Last updated: June 2026*

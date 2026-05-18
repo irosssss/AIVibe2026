@@ -282,4 +282,45 @@ private enum ToolRegistryKey: DependencyKey {
         return registry
     }()
 }
+
+// MARK: - AgentLoop Dependency (Stage 3)
+
+extension DependencyValues {
+    public var agentLoop: AgentLoop {
+        get { self[AgentLoopKey.self] }
+        set { self[AgentLoopKey.self] = newValue }
+    }
+}
+
+private enum AgentLoopKey: DependencyKey {
+    static let liveValue: AgentLoop = {
+        let registry = ToolRegistry()
+        Task {
+            await registry.registerDomainTools()
+        }
+        return AgentLoop(
+            toolRegistry: registry,
+            providerRouter: DependencyValues.liveValue.aiRouter
+        )
+    }()
+
+    static let testValue: AgentLoop = {
+        let registry = ToolRegistry()
+        return AgentLoop(
+            toolRegistry: registry,
+            providerRouter: DependencyValues.testValue.aiRouter
+        )
+    }()
+
+    static let previewValue: AgentLoop = {
+        let registry = ToolRegistry()
+        Task {
+            await registry.registerDomainTools()
+        }
+        return AgentLoop(
+            toolRegistry: registry,
+            providerRouter: DependencyValues.previewValue.aiRouter
+        )
+    }()
+}
 #endif
