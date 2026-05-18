@@ -402,7 +402,23 @@ AIVibe/Core/AI/
     └── AgentLoop.swift               ✅ (24.8KB)
 ```
 
-**Следующий этап:** Observability + Evals (Blueprint §13) — tracing, metrics, 8 eval probes, Circuit Breaker monitoring. Или Tests для AgentLoop.
+---
+
+### Этап 12 — Observability + Evals + Tests (Blueprint §13)
+
+| Дата | Файл | Описание | Статус |
+|------|------|----------|--------|
+| Июнь 2026 | `AIVibe/Core/AI/Agent/AgentObservability.swift` | Observability: TraceEventType (13 типов), TraceRecord (toJSON), ObservabilityCollector actor (record/snapshot/resetMetrics), AgentMetrics (6 метрик), ToolStats (per-tool), EvalProbe (8 probes), EvalProbeRunner actor, EvalProbeResult, EvalSummary. Blueprint §13 | ✅ |
+| Июнь 2026 | `AIVibeTests/AI/AgentLoopTests.swift` | Acceptance tests: AgentLoopTests (12), ObservabilityCollectorTests (6), EvalProbeTests (5), EvalProbeRunnerTests (4), TraceRecordTests (2) = 29 тестов. Blueprint §13 | ✅ |
+
+### Сводка Stage 4
+
+```text
+2 файла, ~62KB Swift 6.
+29 тестов, покрывающих все компоненты агента.
+```
+
+**Следующий этап:** Stage 5: Skills and Connectors (Blueprint §10).
 
 ---
 
