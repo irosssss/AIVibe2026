@@ -261,17 +261,46 @@ AIVibe/Core/AI/
 | Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/RecommendStyleTool.swift` | Stage 2.3: Рекомендация стиля интерьера — StyleRecommendation, StyleProfile (5 стилей + traits), RoomConstraints (освещение/форма/функция), ColorPalette. draft, timeout 20s, maxResultChars 3000. mockRecommend для Windows. Зарегистрирован в ToolRegistry.registerDomainTools() (3/5) | ✅ |
 | Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/GenerateArrangementTool.swift` | Stage 2.4: План расстановки мебели с AR-координатами — FurniturePlacement (position/rotation/scale), ArrangementPlan (placements, walkPathScore, visualBalanceScore, warnings, freeFloorAreaM2). Collision detection, forbidden zones (окна/двери/батареи), эвристики по категориям (sofa → вдоль стен, table → центр, chair → периметр). draft, timeout 15s, maxItems 30. Зарегистрирован в ToolRegistry.registerDomainTools() (4/5) | ✅ |
 
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/DraftShoppingListTool.swift` | Stage 2.5: Список покупок — ShoppingListItem (name/url/price/marketplace/quantity/furnitureId/category), ShoppingListResponse (totalPriceRub/budgetRemaining/budgetWarning/optimizationTips). BudgetWarning (overBudget/underutilized/tight/ok). DraftShoppingListInput.Selection. draft, timeout 5s, maxResultChars 4000. deterministicPrice/deterministicName/deterministicCategory для mock. previewList() для preview. Зарегистрирован в ToolRegistry.registerDomainTools() (5/5) | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolRegistry.swift` | registerDomainTools() → 5/5 (DraftShoppingListTool добавлен) | ✅ |
+
 ### Сводка Stage 2 Progress
 
 ```text
-Domain Tools: 4/5 готово
+Domain Tools: 5/5 ГОТОВО 🎉
 
 ✅ analyze_room_scan           — LiDAR USDZ анализ (420 строк)
 ✅ search_marketplace_furniture — WB/Ozon поиск (380 строк)
 ✅ recommend_style             — рекомендация стиля (520 строк)
 ✅ generate_arrangement_plan   — план расстановки (680 строк)
-⏳ draft_shopping_list         — список покупок (Stage 2.5)
+✅ draft_shopping_list         — список покупок (450 строк)
 ```
+
+### Итог Tool Registry — полностью готов
+
+```
+AIVibe/Core/AI/ToolRegistry/                    ← 10 файлов, ~3500 строк Swift 6
+├── ToolDefinitions.swift                       ← базовые типы
+├── PermissionEngine.swift                      ← permission matrix
+├── ResultLimiter.swift                         ← лимиты + trimmer
+├── ToolScheduler.swift                         ← планировщик
+├── ToolRegistry.swift                          ← центральный actor (TCA Dependency)
+└── Tools/
+    ├── AnalyzeRoomScanTool.swift               ← Stage 2.1
+    ├── SearchMarketplaceFurnitureTool.swift     ← Stage 2.2
+    ├── RecommendStyleTool.swift                ← Stage 2.3
+    ├── GenerateArrangementTool.swift           ← Stage 2.4
+    └── DraftShoppingListTool.swift             ← Stage 2.5
+```
+
+**Blueprint §6 coverage — 100%:**
+```
+analyze_room_scan ✅    search_marketplace_furniture ✅
+recommend_style ✅      generate_arrangement_plan ✅
+draft_shopping_list ✅ (confirm_purchase_order — DENY в MVP)
+```
+
+**Следующий этап:** Core Agentic Loop (Blueprint §4) — run_aivibe_agent, context builder, Triplex Fallback в loop, auto-compaction.
 
 ---
 

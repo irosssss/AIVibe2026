@@ -65,15 +65,16 @@ public actor ToolRegistry {
     /// Регистрирует все domain-specific инструменты (Blueprint §6).
     /// - analyze_room_scan
     /// - search_marketplace_furniture
-    /// - recommend_style (Stage 2.3)
-    /// - generate_arrangement_plan (Stage 2.4)
-    /// - draft_shopping_list (Stage 2.5)
+    /// - recommend_style
+    /// - generate_arrangement_plan
+    /// - draft_shopping_list
     public func registerDomainTools() {
         register(AnalyzeRoomScanTool())
         register(SearchMarketplaceFurnitureTool())
         register(RecommendStyleTool())
         register(GenerateArrangementTool())
-        logger.info("🏗️ Domain-инструменты зарегистрированы: 4/5 (analyze_room_scan, search_marketplace_furniture, recommend_style, generate_arrangement_plan)")
+        register(DraftShoppingListTool())
+        logger.info("🏗️ Domain-инструменты зарегистрированы: 5/5 (analyze_room_scan, search_marketplace_furniture, recommend_style, generate_arrangement_plan, draft_shopping_list)")
     }
 
     /// Удаляет инструмент по имени.
