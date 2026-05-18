@@ -1,0 +1,7 @@
+{
+  "name": "aivibe-rag-indexer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Function по расписанию — индексация дизайн-контента в RAG"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "aivibe-ai-advisor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Function — AI Advisor с triplex fallback (YandexGPT → GigaChat → CoreML)"
+}

@@ -321,4 +321,35 @@ Get-ChildItem -Recurse -Filter "*.swift" | Select-Object FullName
 
 Если каких-то файлов нет — создай их.
 После — git add . && git commit -m "feat: complete Core layer - providers, network, analytics, tests" && git push origin master
+
+---
+
+## ═══════════════════════════════════════════
+## СЕССИЯ 11 — Marketplace + Apify + RAG + Image Gen  ✅ DONE
+## ═══════════════════════════════════════════
+
+```
+@PROJECT_RULES_v2.md @README.md @SESSION_07_marketplace_apify.md
+
+Реализовано:
+**Backend:** backend/
+- shared/apify-client.js (ESM, getSecrets)
+- shared/rag-search.js (cosine similarity RAG)
+- shared/yandexgpt.js (ESM + getEmbedding)
+- shared/gigachat.js (ESM-обёртка)
+- shared/secrets.js (+APIFY_API_TOKEN, YANDEXGPT_FOLDER_ID, GIGACHAT_CLIENT_ID)
+- shared/ydb-client.js (заглушка)
+- functions/ai-advisor/index.js (+RAG контекст)
+- functions/marketplace/index.js (Apify → enrich)
+- functions/rag-indexer/index.js (3 источника + расписание)
+- functions/image-gen/index.js (YandexGPT → GigaChat → CoreML)
+- У каждой функции package.json с "type": "module"
+
+**iOS:** AIVibe/Features/Marketplace/
+- MarketplaceFeature.swift (TCA Reducer + Apify enrich)
+- MarketplaceView.swift
+- AIVibe/Features/ARDesigner/ImageGenClient.swift (TCA Reducer)
+
+**Тесты:** ❌ не написаны (зависит от Apify API, mocked-тесты можно)
+```
 ```

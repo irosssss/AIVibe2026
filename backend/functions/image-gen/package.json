@@ -1,0 +1,7 @@
+{
+  "name": "aivibe-image-gen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Function — генерация изображений интерьеров через Apify"
+}

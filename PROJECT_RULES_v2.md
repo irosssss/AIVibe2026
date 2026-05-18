@@ -25,33 +25,44 @@ Circuit Breaker: 3 ошибки → пауза 5 минут
 ## 🗂️ Структура файлов Xcode
 AIVibe/
 ├── App/
+│   └── DI/          ← AppDependencies.swift
 ├── Core/
 │   ├── AI/          ← AIProviderRouter, CircuitBreaker, Providers/
 │   ├── Network/     ← NetworkClient, NetworkError
 │   ├── Storage/     ← StorageClient
-│   └── Analytics/   ← AppMetricaAnalytics
+│   └── Analytics/   ← AppMetricaAnalytics (AnalyticsLogging)
 ├── Features/
-│   ├── RoomScan/    ← ждёт Mac
-│   ├── ARDesigner/  ← ждёт Mac
-│   ├── AIAdvisor/   ← ждёт Mac
+│   ├── RoomScan/    ← код готов, ждёт Mac (RealityKit/LiDAR)
+│   ├── ARDesigner/  ← код готов (ImageGenClient), ждёт Mac (SwiftUI Preview)
+│   ├── AIAdvisor/   ← код готов (TCA Reducer + RAG), ждёт Mac (SwiftUI Preview)
 │   ├── Portfolio/   ← ждёт Mac
-│   └── Marketplace/ ← ждёт Mac
-└── Shared/
-    ├── UI/
-    ├── Utils/       ← Logger.swift уже есть
-    └── Models/
+│   └── Marketplace/ ← код готов (TCA Reducer + View + Apify), ждёт Mac
 backend/             ← Yandex Cloud Functions (Node.js 20)
-AIVibeTests/AI/      ← Unit тесты
+├── shared/          ← apify-client, yandexgpt, gigachat, rag-search, secrets, ydb-client
+└── functions/       ← 4 функции: ai-advisor, marketplace, rag-indexer, image-gen
+AIVibeTests/AI/      ← 12 тестов AIProviderRouter
 
 ## ✅ Уже готово (НЕ пересоздавай)
-- AIVibe/Core/AI/AIError.swift         (12 case-ов)
-- AIVibe/Core/AI/AIProvider.swift      (протокол AIProviderProtocol)
-- AIVibe/Core/AI/AIModels.swift        (AIPrompt, AIResponse, ChatMessage)
-- AIVibe/Core/AI/CircuitBreaker.swift  (actor, threshold=3, timeout=300s)
-- AIVibe/Core/AI/AIProviderRouter.swift (actor, Triplex fallback)
+- AIVibe/Core/AI/AIError.swift                  (12 case-ов)
+- AIVibe/Core/AI/AIProvider.swift               (протокол AIProviderProtocol)
+- AIVibe/Core/AI/AIModels.swift                 (AIPrompt, AIResponse, ChatMessage)
+- AIVibe/Core/AI/CircuitBreaker.swift           (actor, threshold=3, timeout=300s)
+- AIVibe/Core/AI/AIProviderRouter.swift         (actor, Triplex fallback + RAG)
 - AIVibe/Core/Storage/StorageClient.swift
-- AIVibe/Core/Analytics/AppMetricaWrapper.swift
+- AIVibe/Core/Analytics/AppMetricaAnalytics.swift (AnalyticsLogging протокол)
 - AIVibe/Core/Network/NetworkClient.swift
+- AIVibe/App/DI/AppDependencies.swift           (DI всех зависимостей)
+- AIVibe/Features/Marketplace/MarketplaceFeature.swift (TCA Reducer + Apify)
+- AIVibe/Features/Marketplace/MarketplaceView.swift
+- AIVibe/Features/ARDesigner/ImageGenClient.swift (TCA Reducer)
+- AIVibe/Features/AIAdvisor/DesignAdvice.swift, DesignRequest.swift, FurniturePiece.swift
+- AIVibe/Features/AIAdvisor/DesignStyle.swift
+- AIVibe/Features/AIAdvisor/AIAdvisorFeature.swift (TCA Reducer + RAG)
+- backend/shared/ (apify-client, yandexgpt, gigachat, rag-search, secrets, ydb-client)
+- backend/functions/ai-advisor/index.js         (triplex fallback + RAG)
+- backend/functions/marketplace/index.js         (Apify + YandexGPT enrich)
+- backend/functions/rag-indexer/index.js         (3 источника, расписание)
+- backend/functions/image-gen/index.js           (YandexGPT → GigaChat → CoreML)
 
 ## 📋 Правила кода
 1. Каждый файл начинается с комментария: // путь/к/файлу.swift — назначение

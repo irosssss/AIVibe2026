@@ -1,0 +1,11 @@
+{
+    "name": "ai-advisor",
+    "version": "1.0.0",
+    "description": "Yandex Cloud Function — triplex fallback AI прокси",
+    "main": "index.js",
+    "type": "module",
+    "engines": {
+        "node": "20"
+    },
+    "dependencies": {}
+}
