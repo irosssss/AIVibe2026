@@ -62,6 +62,18 @@ public actor ToolRegistry {
         }
     }
 
+    /// Регистрирует все domain-specific инструменты (Blueprint §6).
+    /// - analyze_room_scan
+    /// - search_marketplace_furniture
+    /// - recommend_style (Stage 2.3)
+    /// - generate_arrangement_plan (Stage 2.4)
+    /// - draft_shopping_list (Stage 2.5)
+    public func registerDomainTools() {
+        register(AnalyzeRoomScanTool())
+        register(SearchMarketplaceFurnitureTool())
+        logger.info("🏗️ Domain-инструменты зарегистрированы: 2/5 (analyze_room_scan, search_marketplace_furniture)")
+    }
+
     /// Удаляет инструмент по имени.
     public func unregister(named name: String) {
         tools.removeValue(forKey: name)
@@ -260,42 +272,11 @@ private enum ToolRegistryKey: DependencyKey {
     static let testValue = ToolRegistry()
     static let previewValue: ToolRegistry = {
         let registry = ToolRegistry()
-        // Preview: регистрируем мок-инструменты
+        // Preview: регистрируем domain-specific инструменты (Blueprint §6)
         Task {
-            await registry.register([MockSearchTool(), MockRecommendTool()])
+            await registry.registerDomainTools()
         }
         return registry
     }()
-}
-
-// MARK: - Mock Tools (для Preview)
-
-private struct MockSearchTool: AgentTool {
-    let name = "search_marketplace_furniture"
-    let description = "Поиск мебели на Wildberries/Ozon (мок)"
-    let inputSchema = ToolInputSchema(properties: [:])
-    let riskClass: ToolRiskClass = .readPublic
-
-    func execute(validated: [String: Any]) async throws -> String {
-        "📋 Найдено 5 диванов:\n1. Диван-книжка «Осло» — 45 990 ₽ (Wildberries)\n2. Угловой диван «Стокгольм» — 67 500 ₽ (Ozon)\n..."
-    }
-}
-
-private struct MockRecommendTool: AgentTool {
-    let name = "recommend_style"
-    let description = "Рекомендация стиля интерьера (мок)"
-    let inputSchema = ToolInputSchema(properties: [:])
-    let riskClass: ToolRiskClass = .draft
-
-    func execute(validated: [String: Any]) async throws -> String {
-        """
-        🎨 Рекомендованный стиль: Скандинавский (confidence: 0.89)
-        Альтернативы: Минимализм (0.72), Современный (0.65)
-        Рекомендации:
-        - Светлые стены (белый, светло-серый)
-        - Натуральное дерево для мебели
-        - Минимум декора, функциональность
-        """
-    }
 }
 #endif
