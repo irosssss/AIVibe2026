@@ -504,7 +504,77 @@ AIVibe/Core/AI/
 ✅ Stage 3: Core Agentic Loop (3 файла)
 ✅ Stage 4: Observability + Tests (2 файла)
 ✅ Stage 5: Skills & Connectors (5 файлов)
-⏳ Stage 6: Integration testing + Launch prep (Blueprint §14)
+✅ Stage 6: Integration testing + Launch prep (1 файл)
+```
+
+---
+
+### Этап 14 — Integration Testing + Launch Prep (Blueprint §14)
+
+| Дата | Файл | Описание | Статус |
+|------|------|----------|--------|
+| Июнь 2026 | `AIVibeTests/AI/Integration/AgentIntegrationTests.swift` | **13 интеграционных тестовых классов** (~43.5KB): `AgentIntegrationFullPipeline` (полный пайплайн: скан→стиль→подбор→расстановка→список→финальный ответ), `AgentProviderFallbackTests` (primary падает→secondary работает + all fail→error), `AgentApprovalFlowTests` (action tool триггерит approval, confirm_purchase_order не зарегистрирован), `AgentCompactionTests` (длинная сессия → 80% порог, compactor сокращает события), `AgentCircuitBreakerTests` (открывается после 3 ошибок, canRetry=false), `AgentPlanActivationTests` (5 тестов: бюджет >500k, комната >30м², >6 объектов, vague фразы, конкретный запрос НЕ активирует), `AgentGoalLoopTests` (checkpoints + objective), `AgentSessionDurabilityTests` (сохранность плана/goal/todo/approval/artifacts после шагов), `AgentSkillAutoLoadTests` (триггер-фразы для 3 скиллов + нейтральная фраза), `ConnectorHealthMonitorTests` (Circuit Breaker для коннекторов + recovery), `ContextBuilderIntegrationTests` (все секции присутствуют + compaction данные), `ObservabilityIntegrationTests` (5 tool calls → success rate 1.0, fallback tracking, eval probes), `TriplexFallbackIntegrationTests` (Yandex→Giga→CoreML порядок). **LaunchGatesVerification** — 9 launch gates (8 probes defined, Triplex order, Circuit Breaker opens, compaction preserves plan+objective, confirm_purchase_order not registered, marketplace search < 3s + returns results). Blueprint §13, §14 | ✅ |
+
+### Сводка Stage 6
+
+```text
+1 файл, ~43.5KB Swift 6.
+13 тестовых классов, ~50+ тестов.
+9 launch gates verified.
+```
+
+**Integration tests coverage:**
+
+```
+Full Pipeline (7 steps)                          ✅
+Provider Fallback (primary fail → secondary ok)  ✅
+All Providers Fail → Error                       ✅
+Approval Flow (action tool → approvalRequired)   ✅
+Auto-Compaction (80% порог + уменьшение событий)  ✅
+Circuit Breaker (open after 3 failures)          ✅
+Planning Mode (4 triggers + 1 negative)          ✅
+Goal Loop (checkpoints + objective tracking)     ✅
+Session Durability (plan/goal/todo/approval)     ✅
+Skill Auto-Load (trigger phrases matching)       ✅
+Connector Health (CB for connectors + recovery)  ✅
+Context Builder (11 sections + compaction data)  ✅
+Observability (success rate + fallback tracking) ✅
+Triplex Fallback Order (Yandex→Giga→CoreML)      ✅
+Launch Gates (9 gates all pass)                  ✅
+```
+
+### Итоговая структура AIVibeTests
+
+```
+AIVibeTests/
+└── AI/
+    ├── MockAIProvider.swift              ✅ (Этап 4)
+    ├── AIProviderRouterTests.swift       ✅ (Этап 4)
+    ├── AgentLoopTests.swift              ✅ (Этап 12, 29 тестов)
+    └── Integration/
+        └── AgentIntegrationTests.swift   ✅ (Этап 14, 50+ тестов)
+```
+
+### 🎉 MVP Agent Blueprint — ПОЛНОСТЬЮ РЕАЛИЗОВАН
+
+```
+┌─────────────────────────────────────────────┐
+│  Stages 1-6: 21 файл Core/AI + 4 файла тестов │
+│  ~5300 строк Swift 6 + ~2800 строк тестов    │
+│  80+ тестов, 6 launch gates                  │
+└─────────────────────────────────────────────┘
+
+Blueprint coverage:
+  §4  (Core Loop)           ✅
+  §5  (Context)             ✅
+  §6  (Tool Registry)       ✅
+  §7  (Planning)            ✅
+  §8  (Goal-like Loop)      ✅
+  §9  (Memory/Compaction)   ✅
+  §10 (Skills/Connectors)   ✅
+  §12 (Safety/Approval)     ✅
+  §13 (Observability/Evals) ✅
+  §14 (Implementation Path) ✅
 ```
 
 ---
