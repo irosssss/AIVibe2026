@@ -72,7 +72,8 @@ public actor ToolRegistry {
         register(AnalyzeRoomScanTool())
         register(SearchMarketplaceFurnitureTool())
         register(RecommendStyleTool())
-        logger.info("🏗️ Domain-инструменты зарегистрированы: 3/5 (analyze_room_scan, search_marketplace_furniture, recommend_style)")
+        register(GenerateArrangementTool())
+        logger.info("🏗️ Domain-инструменты зарегистрированы: 4/5 (analyze_room_scan, search_marketplace_furniture, recommend_style, generate_arrangement_plan)")
     }
 
     /// Удаляет инструмент по имени.
