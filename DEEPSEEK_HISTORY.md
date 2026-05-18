@@ -6,6 +6,17 @@
 
 ---
 
+## 🧭 Протокол работы DeepSeek
+
+1. **Перед любым изменением** — прочитай `DEEPSEEK_HISTORY.md` и `admin/admin-panel/DEEPSEEK_HISTORY.md`, чтобы знать состояние проекта.
+2. **Не перечитывай все файлы заново** — история хранит, какие файлы уже изменены и какие шаги выполнены.
+3. **После каждого завершённого действия** — обнови `DEEPSEEK_HISTORY.md` записью в таблицу соответствующего этапа.
+4. **Формат записи**: `| Дата | Файл / Действие | Что сделано | Статус |`
+5. **Статусы**: ✅ готово, 🔄 в процессе, ⏳ ожидание, ❌ ошибка.
+6. **Если файл уже изменён в истории** — не меняй его снова, если не было новой команды.
+
+---
+
 ## 📋 Обзор проекта
 
 **AIVibe** — iOS-приложение для дизайна интерьеров. Пользователь фотографирует комнату → AI генерирует дизайн → AR показывает результат.
@@ -141,6 +152,27 @@ AIVibe/
 ├── backend/         → 6 файлов (entry, 2 proxies, cache, package, readme) ✅
 └── admin/admin-panel/ → TailAdmin React, готов к доработкам ✅
 ```
+
+---
+
+## 📎 Полезные ссылки
+
+- [DEEPSEEK_PROMPTS.md](./DEEPSEEK_PROMPTS.md) — все задания DeepSeek по сессиям
+- [PROJECT_RULES_v2.md](./PROJECT_RULES_v2.md) — правила проекта
+- [backend/README.md](./backend/README.md) — документация backend
+- [admin/admin-panel/DEEPSEEK_HISTORY.md](./admin/admin-panel/DEEPSEEK_HISTORY.md) — история админ-панели
+
+---
+
+### Этап 8 — ESM-конвертация backend (Шаг 2)
+
+| Дата | Файл | Изменения | Статус |
+|------|------|-----------|--------|
+| Июнь 2026 | `backend/index.js` | `require('./...')` → `import { ... } from './....js'`; сигнатуры → `* as cache`; `module.exports.handler` → `export const handler` | ✅ |
+| Июнь 2026 | `backend/cache.js` | `module.exports = { ... }` → `export { ... }` | ✅ |
+| Июнь 2026 | `backend/blockedUsers.js` | `require('fs')`/`require('path')` → `import fs`/`import path` + `fileURLToPath` → `__filename`/`__dirname`; `module.exports = {` → `export {` | ✅ |
+| Июнь 2026 | `backend/promptGuard.js` | `module.exports = {` → `export {`; удалён лишний `'use strict';` (ESM) | ✅ |
+| Июнь 2026 | **Аудит + исправления** | `backend/index.js`: пути импорта `./yandexgpt.js` → `./shared/yandexgpt.js`; сигнатуры вызовов → объектный формат `callYandexGPT({prompt, ...})`; удалён дубль `backend/ai-advisor/` (оставлен `backend/functions/ai-advisor/`) | ✅ |
 
 ---
 

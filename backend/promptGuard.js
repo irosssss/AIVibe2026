@@ -15,8 +15,6 @@
  *   0 — Чисто
  */
 
-'use strict';
-
 // ============================================================================
 // 1. Regex-правила (severity-based)
 // ============================================================================
@@ -411,7 +409,7 @@ function formatResult(result, userId) {
   };
 }
 
-module.exports = {
+export {
   analyze,
   isStrike,
   isImmediateBlock,

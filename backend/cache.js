@@ -85,4 +85,4 @@ function size() {
     return store.size;
 }
 
-module.exports = { get, set, clear, size };
+export { get, set, clear, size };

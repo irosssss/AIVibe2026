@@ -22,10 +22,12 @@
  *   }
  */
 
-'use strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const fs = require('fs');
-const path = require('path');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Путь к JSON-хранилищу (рядом с этим файлом)
 const STORAGE_FILE = path.join(__dirname, 'blocked_users.json');
@@ -306,7 +308,7 @@ function getStats() {
 // This avoids an unnecessary dependency on Express.
 // ============================================================================
 
-module.exports = {
+export {
   // Core
   isBlocked,
   blockUser,

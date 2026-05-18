@@ -3,11 +3,11 @@
 // Triplex fallback: YandexGPT → GigaChat → Cache.
 // Rate limit: 20 req/min per userId (in-memory).
 
-const { callYandexGPT } = require('./yandexgpt');
-const { callGigaChat } = require('./gigachat');
-const cache = require('./cache');
-const promptGuard = require('./promptGuard');
-const blockedUsers = require('./blockedUsers');
+import { callYandexGPT } from './shared/yandexgpt.js';
+import { callGigaChat } from './shared/gigachat.js';
+import * as cache from './cache.js';
+import * as promptGuard from './promptGuard.js';
+import * as blockedUsers from './blockedUsers.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ function checkRateLimit(userId) {
  * @param {import('yc-function').YandexCloudContext} context
  * @returns {Promise<{ statusCode: number, body: string, headers: object }>}
  */
-module.exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
     const startTime = Date.now();
     const path = event.path || event.rawPath || '/';
     const method = event.httpMethod;
@@ -188,39 +188,28 @@ module.exports.handler = async (event, context) => {
     let provider;
     let latencyMs;
 
-    // Попытка 1: YandexGPT
-    const yandexIamToken = process.env.YANDEX_IAM_TOKEN;
-    const yandexFolderId = process.env.YANDEX_FOLDER_ID;
-
-    if (yandexIamToken && yandexFolderId) {
-        try {
-            const yandexStart = Date.now();
-            text = await callYandexGPT(prompt, yandexIamToken, yandexFolderId);
-            latencyMs = Date.now() - yandexStart;
-            provider = 'yandexgpt';
-            console.log('[service] YandexGPT success', { userId: userId.slice(0, 16), latencyMs });
-        } catch (err) {
-            console.warn('[service] YandexGPT failed', { userId: userId.slice(0, 16), error: String(err.message).slice(0, 100) });
-        }
-    } else {
-        console.warn('[config] YANDEX_IAM_TOKEN / YANDEX_FOLDER_ID not set');
+    // Попытка 1: YandexGPT (shared-модуль сам получает secrets)
+    try {
+        const yandexStart = Date.now();
+        text = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
+        latencyMs = Date.now() - yandexStart;
+        provider = 'yandexgpt';
+        console.log('[service] YandexGPT success', { userId: userId.slice(0, 16), latencyMs });
+    } catch (err) {
+        console.warn('[service] YandexGPT failed', { userId: userId.slice(0, 16), error: String(err.message).slice(0, 100) });
     }
 
     // Попытка 2: GigaChat (если YandexGPT не ответил)
-    const gigachatClientSecret = process.env.GIGACHAT_CLIENT_SECRET;
-
-    if (!text && gigachatClientSecret) {
+    if (!text) {
         try {
             const gigaStart = Date.now();
-            text = await callGigaChat(prompt, gigachatClientSecret);
+            text = await callGigaChat({ prompt, timeoutMs: 25000 });
             latencyMs = Date.now() - gigaStart;
             provider = 'gigachat';
             console.log('[service] GigaChat success', { userId: userId.slice(0, 16), latencyMs });
         } catch (err) {
             console.warn('[service] GigaChat failed', { userId: userId.slice(0, 16), error: String(err.message).slice(0, 100) });
         }
-    } else if (!text && !gigachatClientSecret) {
-        console.warn('[config] GIGACHAT_CLIENT_SECRET not set');
     }
 
     // Попытка 3: Cache (если оба провайдера не ответили)
