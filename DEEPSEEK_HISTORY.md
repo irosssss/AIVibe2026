@@ -422,4 +422,91 @@ AIVibe/Core/AI/
 
 ---
 
+### Этап 13 — Skills & Connectors (Blueprint §10)
+
+| Дата | Файл | Описание | Статус |
+|------|------|----------|--------|
+| Июнь 2026 | `AIVibe/Core/AI/Connectors/WildberriesConnector.swift` | Wildberries API v3: searchProducts (GET /content/v3/cards/list), getProductInfo, getCategories, checkStock. Rate limit 100 req/min. WBProduct, WBDimensions, WBCategory, WBStockInfo. ConnectorError, ConnectorID enum | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Connectors/OzonConnector.swift` | Ozon API v2: searchProducts (POST /v2/product/list), getProductInfo, getCategories, checkStock. Rate limit 100 req/min. OzonProduct, OzonDimensions, OzonCategory, OzonStockInfo | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Connectors/LockBoxSecretsManager.swift` | Yandex LockBox менеджер секретов: SecretKey (7 ключей), getSecret/getApiKey/getOAuthToken/getClientSecret, кэш в памяти. EnvironmentLoader.loadDotEnv() для локальной разработки. ConnectorHealthMonitor actor: Circuit Breaker для коннекторов (maxFailures=3, cooldown=300s), recordSuccess/recordFailure/isHealthy/status/allStates | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Skills/SkillIndex.swift` | SkillIndex actor: 3 стандартных скилла (design_advisor, furniture_matcher, budget_optimizer) с полными инструкциями, триггер-фразами, allowed/forbidden tools, валидацией. AgentSkill, SkillState, SkillValidationResult | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/Skills/SkillIntegration.swift` | SkillExecutor actor (load/unload/autoLoad/validate), SkillToolGuard actor (canUseTool/allowedTools/forbiddenTools), SkillActionRequest/SkillActionResult, SkillProvider actor (index + executor + guard). Обработка invoke_skill meta-tool | ✅ |
+
+### Сводка Stage 5
+
+```text
+5 файлов, ~60KB Swift 6.
+
+Connectors:
+  WildberriesConnector           — WB API v3, search + info + categories + stock
+  OzonConnector                  — Ozon API v2, search + info + categories + stock
+  LockBoxSecretsManager          — секреты (7 ключей) + EnvironmentLoader
+  ConnectorHealthMonitor         — Circuit Breaker для коннекторов
+
+Skills:
+  SkillIndex (actor)             — 3 скилла с полными инструкциями
+  SkillExecutor (actor)          — загрузка/выгрузка/валидация
+  SkillToolGuard (actor)         — проверка доступа к инструментам
+  SkillProvider (actor)          — единая точка входа
+  SkillActionRequest/Result      — протокол для invoke_skill meta-tool
+```
+
+### Blueprint §10 coverage — 100%
+
+```
+✅ skill: design_advisor     — analyze_room_scan, recommend_style, read_resource
+✅ skill: furniture_matcher  — search_marketplace_furniture, generate_arrangement_plan
+✅ skill: budget_optimizer   — search_marketplace_furniture, draft_shopping_list
+✅ connector: wildberries_api — read_catalog, read_prices, pinned v3
+✅ connector: ozon_api       — read_catalog, read_prices, pinned v2
+✅ Yandex LockBox auth       — API keys + OAuth tokens
+✅ ConnectorHealthMonitor    — Circuit Breaker для коннекторов
+```
+
+### Итоговая структура Core/AI — 20 файлов, ~5200 строк
+
+```
+AIVibe/Core/AI/
+├── AIError.swift                       ✅
+├── AIProvider.swift                    ✅
+├── AIModels.swift                      ✅
+├── AIProviderHelpers.swift             ✅
+├── AIProviderRouter.swift              ✅
+├── CircuitBreaker.swift                ✅
+├── CircuitBreakerConfig.swift          ✅
+├── Providers/ (3 файла)                ✅
+├── ToolRegistry/ (10 файлов)           ✅ ← Stages 1-2
+│   ├── ToolDefinitions.swift
+│   ├── PermissionEngine.swift
+│   ├── ResultLimiter.swift
+│   ├── ToolScheduler.swift
+│   ├── ToolRegistry.swift
+│   └── Tools/ (5 domain tools)
+├── Agent/ (4 файла)                    ✅ ← Stages 3-4
+│   ├── AgentSession.swift
+│   ├── ContextBuilder.swift
+│   ├── AgentLoop.swift
+│   └── AgentObservability.swift
+├── Connectors/ (3 файла)               ✅ ← Stage 5 NEW
+│   ├── WildberriesConnector.swift
+│   ├── OzonConnector.swift
+│   └── LockBoxSecretsManager.swift
+└── Skills/ (2 файла)                   ✅ ← Stage 5 NEW
+    ├── SkillIndex.swift
+    └── SkillIntegration.swift
+```
+
+### Общий прогресс MVP Agent
+
+```
+✅ Stage 1: Tool Registry engine (5 файлов)
+✅ Stage 2: Domain tools (5 tools)
+✅ Stage 3: Core Agentic Loop (3 файла)
+✅ Stage 4: Observability + Tests (2 файла)
+✅ Stage 5: Skills & Connectors (5 файлов)
+⏳ Stage 6: Integration testing + Launch prep (Blueprint §14)
+```
+
+---
+
 *Last updated: June 2026*
