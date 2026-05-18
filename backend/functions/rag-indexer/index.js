@@ -34,14 +34,26 @@ export const handler = async (event, context) => {
         if (!page.markdown || page.markdown.length < 100) continue;
         const chunks = splitChunks(page.markdown, 2000);
 
-        for (const chunk of chunks) {
-          const embedding = await getEmbedding(chunk);
+        // Параллельные эмбеддинги — убираем N+1 serial bottleneck
+        // Лимит 10 параллельных запросов к embedding API
+        const embeddings = await parallelLimit(
+          chunks,
+          10,
+          chunk => getEmbedding(chunk).catch(err => {
+            console.error(`Embedding failed for chunk of ${url}:`, err.message);
+            return null;
+          })
+        );
+
+        for (let i = 0; i < chunks.length; i++) {
+          const embedding = embeddings[i];
+          if (!embedding) continue; // skip failed embeddings
           await ydbClient.upsert('rag_chunks', {
-            id: Buffer.from(url + chunk.slice(0, 40)).toString('base64').slice(0, 32),
+            id: Buffer.from(url + chunks[i].slice(0, 40)).toString('base64').slice(0, 32),
             source_url: url,
-            content: chunk,
+            content: chunks[i],
             embedding: JSON.stringify(embedding),
-            category: detectCategory(chunk),
+            category: detectCategory(chunks[i]),
             created_at: new Date().toISOString(),
           });
           totalChunks++;
@@ -77,4 +89,28 @@ function detectCategory(text) {
   if (t.includes('кухня')) return 'kitchen';
   if (t.includes('цвет') || t.includes('палитра')) return 'color';
   return 'general';
+}
+
+/**
+ * Выполняет limit параллельных промисов из tasks.
+ * @template T
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T) => Promise<any>} fn
+ * @returns {Promise<Array<any>>}
+ */
+async function parallelLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }

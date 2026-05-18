@@ -579,4 +579,15 @@ Blueprint coverage:
 
 ---
 
-*Last updated: June 2026*
+*Last updated: July 2026*
+
+---
+
+### Этап 15 — Устранение complexity-предупреждений
+
+| Дата | Файл | Изменения | Статус |
+|------|------|-----------|--------|
+| Июль 2026 | `backend/functions/rag-indexer/index.js` | **RAG N+1→parallel**: эмбеддинги запрашиваются через `parallelLimit` (10 конкурентных запросов), через `Promise.all` + worker pool pattern. Убран serial bottleneck. | ✅ |
+| Июль 2026 | `backend/functions/ai-advisor/index.js` | **Circuit Breaker дубликация устранена**: убраны локальные `CircuitBreaker`, `responseCache`, `getCachedResponse`, `cacheResponse`, `simpleHash`, `callYandexGPT`, `callGigaChat`. Вместо 140 строк дубликата — вызов `triplexFallback()` из `shared/triplex-fallback.js` (~60 строк чистого handler). | ✅ |
+| Июль 2026 | `backend/index.js` | **Dual entry points починены**: `handleAdminApi` вызывал `cache.clear()` и `circuitBreaker.statusAll()` из замыкания — заменено на `clearCache()` и `circuitStatus()` из `shared/triplex-fallback.js`. | ✅ |
+| Июль 2026 | `complexity-report.md` | Все 3 WARN → FIXED. Дата обновлена. | ✅ |

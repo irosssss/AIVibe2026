@@ -4,12 +4,9 @@
 // Rate limit: 20 req/min per userId (in-memory).
 // Circuit Breaker per provider (3 failures → 5min cooldown, 60s recovery probe).
 
-import { callYandexGPT } from './shared/yandexgpt.js';
-import { callGigaChat } from './shared/gigachat.js';
-import * as cache from './cache.js';
 import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
-import { CircuitBreaker } from './shared/circuit-breaker.js';
+import { triplexFallback, circuitStatus, circuitReset, clearCache, cacheSize } from './shared/triplex-fallback.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -17,13 +14,6 @@ const RATE_LIMIT_PER_MINUTE = 20;
 const RATE_WINDOW_MS = 60_000; // 1 минута
 const APP_TOKEN_HEADER = 'x-app-token';
 const REQUEST_ID_HEADER = 'x-request-id';
-
-// ─── Circuit Breaker ─────────────────────────────────────────────
-// Реализация вынесена в shared/circuit-breaker.js
-// Константы (threshold, cooldown) — из shared/circuit-config.js
-// Синхронизировать с iOS: AIVibe/Core/AI/CircuitBreakerConfig.swift
-
-const circuitBreaker = new CircuitBreaker();
 
 // ─── Rate Limiter (in-memory) ────────────────────────────────────
 
@@ -103,9 +93,9 @@ export const handler = async (event, context) => {
             requestId,
             timestamp: new Date().toISOString(),
             rateLimit: { max: RATE_LIMIT_PER_MINUTE, windowMs: RATE_WINDOW_MS },
-            circuitBreaker: circuitBreaker.statusAll(),
+            circuitBreaker: circuitStatus(),
             blockedUsers: blockedUsers.getStats(),
-            cache: cache.stats ? cache.stats() : null,
+            cache: { size: cacheSize() },
             version: '2.0',
         });
     }
@@ -216,91 +206,35 @@ export const handler = async (event, context) => {
         console.warn('[security] Strike recorded', { userId: userId.slice(0, 16), strikes: strikeResult.strikes });
     }
 
-    // ── 5. Triplex Fallback (с Circuit Breaker) ──────────────────
-    let text;
-    let provider;
-    let latencyMs;
-    let circuitSkipped = null; // какой провайдер был пропущен CB
-
-    // Попытка 1: YandexGPT
-    const yandexCB = circuitBreaker.allowed('yandexgpt');
-    if (yandexCB.allowed) {
-        try {
-            const yandexStart = Date.now();
-            text = await callYandexGPT({ prompt, imageBase64, timeoutMs: 25000 });
-            latencyMs = Date.now() - yandexStart;
-            provider = 'yandexgpt';
-            circuitBreaker.success('yandexgpt');
-            log('info', 'YandexGPT success', { provider, latencyMs });
-        } catch (err) {
-            circuitBreaker.failure('yandexgpt', err);
-            log('warn', 'YandexGPT failed', { error: String(err.message).slice(0, 120) });
+    // ── 5. Triplex Fallback (YandexGPT → GigaChat → Cache) ────
+    // Использует единую реализацию из shared/triplex-fallback.js
+    const triplexResult = await triplexFallback({
+        prompt,
+        imageBase64,
+        timeoutMs: 25000,
+        log: (level, msg, extra) => {
+            const entry = { _l: level, _rid: requestId.slice(0, 8), _t: Date.now() - startTime, ...extra };
+            console.log(`[${level}] ${msg}`, JSON.stringify(entry).slice(0, 500));
         }
-    } else {
-        circuitSkipped = circuitSkipped || 'yandexgpt';
-        log('warn', 'YandexGPT skipped by Circuit Breaker', { state: yandexCB.state });
-    }
-
-    // Попытка 2: GigaChat
-    if (!text) {
-        const gigaCB = circuitBreaker.allowed('gigachat');
-        if (gigaCB.allowed) {
-            try {
-                const gigaStart = Date.now();
-                text = await callGigaChat({ prompt, timeoutMs: 25000 });
-                latencyMs = Date.now() - gigaStart;
-                provider = 'gigachat';
-                circuitBreaker.success('gigachat');
-                log('info', 'GigaChat success', { provider, latencyMs });
-            } catch (err) {
-                circuitBreaker.failure('gigachat', err);
-                log('warn', 'GigaChat failed', { error: String(err.message).slice(0, 120) });
-            }
-        } else {
-            circuitSkipped = (circuitSkipped ? circuitSkipped + ',' : '') + 'gigachat';
-            log('warn', 'GigaChat skipped by Circuit Breaker', { state: gigaCB.state });
-        }
-    }
-
-    // Попытка 3: Cache (не зависит от Circuit Breaker)
-    if (!text) {
-        const cached = cache.get(prompt);
-        if (cached) {
-            text = cached.text;
-            provider = 'cache';
-            latencyMs = Date.now() - startTime;
-            log('info', 'Cache hit', { cachedProvider: cached.provider });
-        }
-    }
-
-    // ── 6. Fallback: если ничего не сработало ────────────────────
-    if (!text) {
-        text = 'Извините, все AI-провайдеры временно недоступны. Пожалуйста, попробуйте позже.';
-        provider = 'unavailable';
-        latencyMs = Date.now() - startTime;
-        log('error', 'All providers exhausted', { circuitSkipped });
-    }
-
-    // ── 7. Кэшируем успешный ответ (кроме кэша) ──────────────────
-    if (provider !== 'cache' && provider !== 'unavailable') {
-        cache.set(prompt, text, provider);
-    }
-
-    // ── 8. Возвращаем ответ ──────────────────────────────────────
-    const totalLatency = Date.now() - startTime;
-
-    log('info', 'Response sent', {
-        provider,
-        latencyMs: totalLatency,
-        rateLimitRemaining: rateInfo.remaining,
     });
 
+    // ── 6. Возвращаем ответ ──────────────────────────────────────
+    const totalLatency = Date.now() - startTime;
+
+    console.log(JSON.stringify({
+        _l: 'info', _rid: requestId.slice(0, 8), _t: totalLatency,
+        msg: 'Response sent',
+        provider: triplexResult.provider,
+        rateLimitRemaining: rateInfo.remaining,
+    }).slice(0, 500));
+
     return jsonResponse(200, {
-        text,
-        provider,
+        text: triplexResult.text,
+        provider: triplexResult.provider,
         latencyMs: totalLatency,
         requestId,
-        circuitBreaker: circuitSkipped ? { skipped: circuitSkipped } : undefined,
+        circuitBreaker: triplexResult.circuitSkipped ? { skipped: triplexResult.circuitSkipped } : undefined,
+        errorLog: triplexResult.errorLog.length > 0 ? triplexResult.errorLog : undefined,
         rateLimit: {
             remaining: rateInfo.remaining,
             resetInMs: rateInfo.resetInMs
@@ -339,8 +273,8 @@ function handleAdminApi(event, path, method, requestId) {
             timestamp: new Date().toISOString(),
             blockedUsers: stats,
             rateLimit: { max: RATE_LIMIT_PER_MINUTE, windowMs: RATE_WINDOW_MS },
-            circuitBreaker: circuitBreaker.statusAll(),
-            cache: cache.stats ? cache.stats() : null,
+            circuitBreaker: circuitStatus(),
+            cache: { size: cacheSize() },
             version: '2.0',
             _note: 'admin endpoint — extended view'
         });
@@ -379,18 +313,18 @@ function handleAdminApi(event, path, method, requestId) {
 
     // Cache clear
     if (path === '/cache/clear' && method === 'POST') {
-        cache.clear();
+        clearCache();
         return jsonResponse(200, { ok: true, message: 'Cache cleared' });
     }
 
     // Circuit Breaker: get status (GET) or reset (POST)
     if (path === '/circuit' && method === 'GET') {
-        return jsonResponse(200, { data: circuitBreaker.statusAll(), generatedAt: new Date().toISOString() });
+        return jsonResponse(200, { data: circuitStatus(), generatedAt: new Date().toISOString() });
     }
     if (path === '/circuit/reset' && method === 'POST') {
-        circuitBreaker.resetAll();
+        circuitReset();
         console.log('[admin] Circuit Breakers reset', { requestId: requestId?.slice(0, 8) });
-        return jsonResponse(200, { ok: true, message: 'Circuit breakers reset to CLOSED', data: circuitBreaker.statusAll() });
+        return jsonResponse(200, { ok: true, message: 'Circuit breakers reset to CLOSED', data: circuitStatus() });
     }
 
     return jsonResponse(404, { error: 'Admin endpoint not found' });
