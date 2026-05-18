@@ -258,15 +258,16 @@ AIVibe/Core/AI/
 | Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/AnalyzeRoomScanTool.swift` | Stage 2.1: Анализ LiDAR USDZ скана — RoomDimensions, DetectedObject, LightSource, RoomAnalysis.toJSON(). readPrivate, timeout 15s, maxResultChars 4000. mockAnalysis для Windows | ✅ |
 | Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/SearchMarketplaceFurnitureTool.swift` | Stage 2.2: Поиск мебели Wildberries/Ozon — FurnitureSearchResult, FurnitureSearchResponse. 6 категорий, 5 стилей, фильтр по бюджету. readPublic, timeout 10s, maxResults 20. mockSearch для Windows | ✅ |
 | Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/ToolRegistry.swift` | Добавлен `registerDomainTools()` — регистрирует AnalyzeRoomScanTool + SearchMarketplaceFurnitureTool. Preview использует реальные инструменты вместо моков | ✅ |
+| Июнь 2026 | `AIVibe/Core/AI/ToolRegistry/Tools/RecommendStyleTool.swift` | Stage 2.3: Рекомендация стиля интерьера — StyleRecommendation, StyleProfile (5 стилей + traits), RoomConstraints (освещение/форма/функция), ColorPalette. draft, timeout 20s, maxResultChars 3000. mockRecommend для Windows. Зарегистрирован в ToolRegistry.registerDomainTools() (3/5) | ✅ |
 
 ### Сводка Stage 2 Progress
 
 ```text
-Domain Tools: 2/5 готово
+Domain Tools: 3/5 готово
 
 ✅ analyze_room_scan           — LiDAR USDZ анализ (420 строк)
 ✅ search_marketplace_furniture — WB/Ozon поиск (380 строк)
-⏳ recommend_style             — рекомендация стиля (Stage 2.3)
+✅ recommend_style             — рекомендация стиля (520 строк)
 ⏳ generate_arrangement_plan   — план расстановки (Stage 2.4)
 ⏳ draft_shopping_list         — список покупок (Stage 2.5)
 ```

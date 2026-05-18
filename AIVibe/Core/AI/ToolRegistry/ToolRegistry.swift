@@ -71,7 +71,8 @@ public actor ToolRegistry {
     public func registerDomainTools() {
         register(AnalyzeRoomScanTool())
         register(SearchMarketplaceFurnitureTool())
-        logger.info("🏗️ Domain-инструменты зарегистрированы: 2/5 (analyze_room_scan, search_marketplace_furniture)")
+        register(RecommendStyleTool())
+        logger.info("🏗️ Domain-инструменты зарегистрированы: 3/5 (analyze_room_scan, search_marketplace_furniture, recommend_style)")
     }
 
     /// Удаляет инструмент по имени.
