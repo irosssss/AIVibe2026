@@ -81,7 +81,7 @@ struct RoomScanView: View {
     private var scanningView: some View {
 #if canImport(RoomPlan)
         RoomCaptureRepresentable(
-            onCapturedRoom: { capturedRoom in
+            onCapturedRoom: { [store] capturedRoom in
                 // CapturedRoom is not Encodable; export via USDZ.
                 let tempURL = FileManager.default.temporaryDirectory
                     .appendingPathComponent("room_scan_\(UUID().uuidString).usdz")
@@ -89,13 +89,15 @@ struct RoomScanView: View {
                     try capturedRoom.export(to: tempURL)
                     let data = try Data(contentsOf: tempURL)
                     try? FileManager.default.removeItem(at: tempURL)
-                    store.send(.scanDidSucceed(data))
+                    Task { @MainActor in store.send(.scanDidSucceed(data)) }
                 } catch {
-                    store.send(.scanDidFail("USDZ export failed: \(error.localizedDescription)"))
+                    let msg = error.localizedDescription
+                    Task { @MainActor in store.send(.scanDidFail("USDZ export failed: \(msg)")) }
                 }
             },
-            onError: { error in
-                store.send(.scanDidFail(error.localizedDescription))
+            onError: { [store] error in
+                let msg = error.localizedDescription
+                Task { @MainActor in store.send(.scanDidFail(msg)) }
             }
         )
         .overlay(alignment: .bottom) {
