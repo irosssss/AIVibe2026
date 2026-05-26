@@ -8,7 +8,6 @@ on:
 
 env:
   SCHEME: "AIVibe"
-  DESTINATION: "platform=iOS Simulator,name=iPhone 16,OS=18.2"
 
 jobs:
   swiftlint:
@@ -37,6 +36,51 @@ jobs:
 
       - name: Show Swift version
         run: swift --version
+
+      - name: List available simulators
+        run: xcrun simctl list devices available | head -30
+
+      - name: Prepare iOS Simulator
+        run: |
+          # Берём первый доступный iPhone симулятор
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data['devices'].items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if 'iPhone' in d['name'] and d['isAvailable']:
+                          print(d['udid'])
+                          sys.exit(0)
+          # Если нет — создаём
+          " 2>/dev/null || true)
+
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No simulator found, creating one..."
+            DEVICE_ID=$(xcrun simctl create "CI-iPhone" "com.apple.CoreSimulator.SimDeviceType.iPhone-16" 2>/dev/null || true)
+          fi
+
+          if [ -z "$DEVICE_ID" ]; then
+            echo "::warning::No simulator available, building for generic platform"
+            echo "DESTINATION=generic/platform=iOS Simulator" >> $GITHUB_ENV
+          else
+            DEVICE_NAME=$(xcrun simctl list devices -j | python3 -c "
+            import json, sys
+            data = json.load(sys.stdin)
+            for runtime, devices in data['devices'].items():
+                for d in devices:
+                    if d['udid'] == '$DEVICE_ID':
+                        # Extract OS version from runtime
+                        parts = runtime.split('.')
+                        ver = '.'.join(parts[-2:]) if len(parts) >= 2 else '18.0'
+                        # More reliable: just use device ID
+                        print(f\"platform=iOS Simulator,id={d['udid']}\")
+                        sys.exit(0)
+            print('generic/platform=iOS Simulator')
+            ")
+            echo "DESTINATION=$DEVICE_NAME" >> $GITHUB_ENV
+          fi
+          echo "Using destination: $DESTINATION"
 
       - name: Cache SPM packages
         uses: actions/cache@v4
@@ -68,6 +112,29 @@ jobs:
 
       - name: Select Xcode 16
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Prepare iOS Simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data['devices'].items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if 'iPhone' in d['name'] and d['isAvailable']:
+                          print(d['udid'])
+                          sys.exit(0)
+          " 2>/dev/null || true)
+
+          if [ -z "$DEVICE_ID" ]; then
+            DEVICE_ID=$(xcrun simctl create "CI-iPhone" "com.apple.CoreSimulator.SimDeviceType.iPhone-16" 2>/dev/null || true)
+          fi
+
+          if [ -z "$DEVICE_ID" ]; then
+            echo "DESTINATION=generic/platform=iOS Simulator" >> $GITHUB_ENV
+          else
+            echo "DESTINATION=platform=iOS Simulator,id=$DEVICE_ID" >> $GITHUB_ENV
+          fi
 
       - name: Cache SPM packages
         uses: actions/cache@v4
