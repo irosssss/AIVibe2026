@@ -15,9 +15,9 @@ struct DesignAdvice: Identifiable, Equatable, Codable, Sendable {
     let provider: String
 
     enum BudgetLevel: String, Equatable, Codable, Sendable {
-        case economy  = "economy"
-        case medium   = "medium"
-        case premium  = "premium"
+        case economy
+        case medium
+        case premium
 
         var displayName: String {
             switch self {

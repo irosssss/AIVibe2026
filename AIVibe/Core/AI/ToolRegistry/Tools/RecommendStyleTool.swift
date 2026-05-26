@@ -250,6 +250,7 @@ public struct RecommendStyleTool: AgentTool {
     // MARK: - Execute
 
     public func execute(validated: [String: Any]) async throws -> String {
+        // swiftlint:disable:next force_cast
         let roomAnalysisJSON = validated["room_analysis"] as! String
         let userPrefs = validated["user_preferences"] as? String
         let roomFunctionStr = validated["room_function"] as? String
@@ -377,6 +378,7 @@ public struct RecommendStyleTool: AgentTool {
 
     /// Оценивает совместимость стиля с ограничениями комнаты.
     /// - Returns: (score 0–1, reasons).
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     private func evaluateStyle(
         _ style: InteriorStyle,
         constraints: RoomConstraints,
@@ -504,17 +506,14 @@ public struct RecommendStyleTool: AgentTool {
 
         // --- Пользовательские предпочтения ---
         if let prefs = userPrefs?.lowercased() {
-            for keyword in styleKeywords(style) {
-                if prefs.contains(keyword.lowercased()) {
-                    score += 0.15
-                    reasons.append("Соответствует вашим предпочтениям: '\(keyword)'")
-                    break
-                }
+            for keyword in styleKeywords(style) where prefs.contains(keyword.lowercased()) {
+                score += 0.15
+                reasons.append("Соответствует вашим предпочтениям: '\(keyword)'")
+                break
             }
             // Негативные предпочтения
             let negativeWords = ["тёмный", "мрачный", "холодный", "скучный", "старый"]
-            for neg in negativeWords {
-                if prefs.contains(neg) {
+            for neg in negativeWords where prefs.contains(neg) {
                     // Не штрафуем — просто не добавляем баллы
                     break
                 }

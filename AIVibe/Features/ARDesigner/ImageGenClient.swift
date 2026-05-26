@@ -15,10 +15,17 @@ struct GeneratedImage: Codable, Equatable, Identifiable {
 
 struct ImageGenClient {
     var generate: @Sendable (
-        _ style: DesignStyle,   // из SESSION 05
-        _ roomType: RoomType,   // из SESSION 05
-        _ colorPalette: [ColorSuggestion]? // из SESSION 05 DesignAdvice
+        _ style: DesignStyle,
+        _ roomType: RoomType,
+        _ colorPalette: [ColorSuggestion]
     ) async throws -> [GeneratedImage]
+}
+
+// MARK: - Nested types for ImageGen response
+
+private struct ImageGenResponse: Codable {
+    struct Item: Codable { let url: String; let prompt: String }
+    let images: [Item]
 }
 
 extension ImageGenClient: DependencyKey {
@@ -31,9 +38,8 @@ extension ImageGenClient: DependencyKey {
             let body: [String: Any] = [
                 "style": style.rawValue,
                 "roomType": roomType.rawValue,
-                // Передаём hex цвета из DesignAdvice.colorPalette (SESSION_05)
-                "colorPalette": palette?.map { $0.hex }.joined(separator: ", ") ?? "",
-                "userId": "current_user_id",
+                "colorPalette": palette.map { $0.hex }.joined(separator: ", "),
+                "userId": "current_user_id"
             ]
 
             var request = URLRequest(url: url)
@@ -44,24 +50,30 @@ extension ImageGenClient: DependencyKey {
 
             let (data, _) = try await URLSession.shared.data(for: request)
 
-            struct Response: Codable {
-                struct Item: Codable { let url: String; let prompt: String }
-                let images: [Item]
-            }
-
-            let decoded = try JSONDecoder().decode(Response.self, from: data)
+            let decoded = try JSONDecoder().decode(ImageGenResponse.self, from: data)
             return decoded.images.compactMap { item in
                 guard let imageURL = URL(string: item.url) else { return nil }
-                return GeneratedImage(id: UUID(), url: imageURL, prompt: item.prompt,
-                                     roomType: roomType, style: style)
+                return GeneratedImage(
+                    id: UUID(),
+                    url: imageURL,
+                    prompt: item.prompt,
+                    roomType: roomType,
+                    style: style
+                )
             }
         }
     )
 
     static let testValue = ImageGenClient(
         generate: { style, roomType, _ in
-            [GeneratedImage(id: UUID(), url: URL(string: "https://placeholder.com")!,
-                           prompt: "test prompt", roomType: roomType, style: style)]
+            guard let placeholderURL = URL(string: "https://placeholder.com") else { return [] }
+            return [GeneratedImage(
+                id: UUID(),
+                url: placeholderURL,
+                prompt: "test prompt",
+                roomType: roomType,
+                style: style
+            )]
         }
     )
 }

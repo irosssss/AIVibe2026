@@ -19,7 +19,7 @@ import Logging
 /// connector: ozon_api
 /// auth: Yandex Lockbox (API key + Client-ID)
 /// ```
-public actor LockBoxSecretsManager: Sendable {
+public actor LockBoxSecretsManager {
 
     // MARK: - Secret Keys
 
@@ -181,7 +181,7 @@ public enum EnvironmentLoader {
 /// - `lastCheck` — время последней проверки
 /// - `consecutiveFailures` — счётчик ошибок подряд
 /// - `cooldownUntil` — до какого времени пропускать запросы
-public actor ConnectorHealthMonitor: Sendable {
+public actor ConnectorHealthMonitor {
 
     // MARK: - State
 

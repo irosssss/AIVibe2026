@@ -24,11 +24,11 @@ struct MarketplaceFeature {
         var query = ""
         // Переиспользуем DesignStyle из SESSION_05 — не дублируем enum
         var selectedStyle: DesignStyle = .modern
-        var budget: Double? = nil
-        var error: String? = nil
+        var budget: Double?
+        var error: String?
 
         // Если пришли из AIAdvisor (SESSION_05) — prefill запроса
-        var prefillFromAdvice: DesignAdvice? = nil
+        var prefillFromAdvice: DesignAdvice?
     }
 
     enum Action {
@@ -74,16 +74,16 @@ struct MarketplaceFeature {
                     await send(.productsLoaded(result))
                 }
 
-            case let .queryChanged(q):
-                state.query = q
+            case let .queryChanged(newQuery):
+                state.query = newQuery
                 return .none
 
-            case let .styleChanged(s):
-                state.selectedStyle = s
+            case let .styleChanged(newStyle):
+                state.selectedStyle = newStyle
                 return .none
 
-            case let .budgetChanged(b):
-                state.budget = b
+            case let .budgetChanged(newBudget):
+                state.budget = newBudget
                 return .none
 
             case let .productsLoaded(.success(products)):
@@ -124,7 +124,7 @@ extension MarketplaceClient: DependencyKey {
                 "query": query,
                 "roomStyle": style,
                 "budget": budget as Any,
-                "userId": "current_user_id",
+                "userId": "current_user_id"
             ]
 
             var request = URLRequest(url: url)
@@ -145,11 +145,12 @@ extension MarketplaceClient: DependencyKey {
 
     static let testValue = MarketplaceClient(
         recommend: { _, _, _ in
-            [MarketplaceProduct(
+            guard let testURL = URL(string: "https://wildberries.ru") else { return [] }
+            return [MarketplaceProduct(
                 id: "1",
                 name: "Диван Осло 3-местный",
                 price: 45990,
-                url: URL(string: "https://wildberries.ru")!,
+                url: testURL,
                 imageURL: nil,
                 aiReason: "Скандинавский дизайн идеально подходит для выбранного стиля",
                 marketplace: "wildberries"

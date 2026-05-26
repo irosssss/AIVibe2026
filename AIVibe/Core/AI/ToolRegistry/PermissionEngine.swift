@@ -181,7 +181,7 @@ extension CustomPermissionRule {
 
     /// Требовать одобрения, если бюджет превышен.
     public static func approvalIfOverBudget(thresholdRub: Int) -> CustomPermissionRule {
-        CustomPermissionRule { toolName, riskClass, arguments, context in
+        CustomPermissionRule { toolName, riskClass, arguments, _ in
             // Проверяем, есть ли в аргументах поле с бюджетом
             if let totalPrice = arguments["total_price_rub"] as? Int,
                totalPrice > thresholdRub {

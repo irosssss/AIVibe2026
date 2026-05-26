@@ -5,6 +5,23 @@
 import ComposableArchitecture
 import UIKit
 
+// MARK: - Nested Types (вынесены из State для SwiftLint nesting rule)
+
+enum AdvisorPhase: Equatable {
+    case idle
+    case capturing
+    case processingImage
+    case awaitingAI
+    case result
+    case error(String)
+}
+
+enum AdvisorImageSource: Equatable {
+    case camera
+    case gallery
+    case roomScan
+}
+
 @Reducer
 struct AIAdvisorFeature {
 
@@ -21,10 +38,10 @@ struct AIAdvisorFeature {
         // Изображение
         var sourceImage: UIImage?
         var isShowingImagePicker: Bool = false
-        var imageSource: ImageSource = .camera
+        var imageSource: AdvisorImageSource = .camera
 
         // Фаза обработки
-        var phase: Phase = .idle
+        var phase: AdvisorPhase = .idle
         var activeProvider: String?
 
         // Результат
@@ -33,21 +50,6 @@ struct AIAdvisorFeature {
         // Чат
         var chatMessages: [ChatMessage] = []
         var currentInput: String = ""
-
-        enum Phase: Equatable {
-            case idle
-            case capturing
-            case processingImage
-            case awaitingAI
-            case result
-            case error(String)
-        }
-
-        enum ImageSource: Equatable {
-            case camera
-            case gallery
-            case roomScan
-        }
     }
 
     // MARK: - Action
@@ -58,7 +60,7 @@ struct AIAdvisorFeature {
         case styleSelected(DesignStyle)
         case roomTypeSelected(RoomType)
 
-        case imageSourceTapped(State.ImageSource)
+        case imageSourceTapped(AdvisorImageSource)
         case imagePicked(UIImage)
         case imagePickerDismissed
 
@@ -109,7 +111,7 @@ struct AIAdvisorFeature {
                 return .none
 
             case .analyzeButtonTapped:
-                guard state.sourceImage != nil else {
+                guard let image = state.sourceImage else {
                     state.phase = .error("Выберите фото")
                     return .none
                 }
@@ -119,7 +121,7 @@ struct AIAdvisorFeature {
                 let request = DesignRequest(
                     roomType: state.selectedRoomType,
                     style: state.selectedStyle,
-                    sourceImage: state.sourceImage!,
+                    sourceImage: image,
                     userComment: state.userComment.isEmpty ? nil : state.userComment,
                     promptStrength: state.promptStrength
                 )

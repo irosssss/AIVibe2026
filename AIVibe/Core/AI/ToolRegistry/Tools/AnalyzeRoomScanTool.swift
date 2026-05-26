@@ -204,8 +204,10 @@ public struct AnalyzeRoomScanTool: AgentTool {
     // MARK: - Execute
 
     public func execute(validated: [String: Any]) async throws -> String {
+        // swiftlint:disable force_cast
         let usdzUri = validated["usdz_uri"] as! String
         let roomId = validated["room_id"] as! String
+        // swiftlint:enable force_cast
 
         // На macOS с RealityKit — реальный парсинг USDZ
         #if canImport(RealityKit) && os(visionOS) == false

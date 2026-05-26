@@ -68,7 +68,7 @@ public final class CoreMLProvider: AIProviderProtocol, Sendable {
         "планировка":
             "Открытая планировка объединяет гостиную, кухню и столовую. "
             + "Зонируйте пространство ковром, разным освещением или "
-            + "лёгкими перегородками. Для маленьких комнат — многофункциональная мебель.",
+            + "лёгкими перегородками. Для маленьких комнат — многофункциональная мебель."
     ]
 
     // MARK: - AIProviderProtocol
@@ -77,15 +77,13 @@ public final class CoreMLProvider: AIProviderProtocol, Sendable {
         let inputText = buildInput(from: prompt).lowercased()
 
         // Ищем первое подходящее ключевое слово
-        for (keyword, response) in templateResponses {
-            if inputText.contains(keyword) {
-                return AIResponse(
-                    text: response,
-                    providerName: name,
-                    isOffline: true,
-                    tokensUsed: 0
-                )
-            }
+        for (keyword, response) in templateResponses where inputText.contains(keyword) {
+            return AIResponse(
+                text: response,
+                providerName: name,
+                isOffline: true,
+                tokensUsed: 0
+            )
         }
 
         // Если ничего не найдено — базовый ответ об интерьере

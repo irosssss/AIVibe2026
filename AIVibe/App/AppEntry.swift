@@ -63,7 +63,7 @@ private struct AppRootView: View {
         .padding()
     }
 
-    private func testRouter() async {
+    func testRouter() async {
         let prompt = AIPrompt(
             messages: [ChatMessage(role: .user, content: "Какой стиль интерьера подойдёт для маленькой кухни?")]
         )

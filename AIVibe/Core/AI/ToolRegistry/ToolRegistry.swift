@@ -112,6 +112,7 @@ public actor ToolRegistry {
     ///
     /// - Parameter call: Запрос на вызов инструмента (из model output).
     /// - Returns: `ToolResult` с результатом выполнения.
+    // swiftlint:disable:next function_body_length
     public func execute(call: ToolCallRequest) async -> ToolResult {
         let startTime = Date()
 

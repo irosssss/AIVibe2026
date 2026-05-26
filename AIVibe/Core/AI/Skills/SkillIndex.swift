@@ -17,7 +17,7 @@ import Logging
 /// ```
 ///
 /// Полные инструкции скилла загружаются при выборе.
-public actor SkillIndex: Sendable {
+public actor SkillIndex {
 
     // MARK: - Properties
 
@@ -151,10 +151,8 @@ public actor SkillIndex: Sendable {
     public func autoLoad(for text: String) async -> [String] {
         let matches = matchingSkills(for: text)
         var loaded: [String] = []
-        for skillId in matches {
-            if await load(skillId) != nil {
-                loaded.append(skillId)
-            }
+        for skillId in matches where await load(skillId) != nil {
+            loaded.append(skillId)
         }
         return loaded
     }

@@ -51,12 +51,12 @@ public struct MockAIProviderFailure: AIProviderProtocol {
 /// Провайдер, считающий количество вызовов.
 /// Падает `shouldFailTimes` раз, затем начинает успешно отвечать.
 public actor MockAIProviderCounting: AIProviderProtocol {
-    public nonisolated let name: String
+    nonisolated public let name: String
     public private(set) var callCount = 0
     private let shouldSucceedAfter: Int
     private let successResponse: AIResponse
 
-    public nonisolated var isAvailable: Bool { get async { true } }
+    nonisolated public var isAvailable: Bool { get async { true } }
 
     public init(
         name: String,

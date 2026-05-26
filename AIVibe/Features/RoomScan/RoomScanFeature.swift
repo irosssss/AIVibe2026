@@ -27,7 +27,7 @@ public struct RoomScanFeature: Sendable {
     @ObservableState
     public struct State: Equatable, Sendable {
         public var status: ScanStatus = .idle
-        public var errorMessage: String? = nil
+        public var errorMessage: String?
 
         public init() {}
     }

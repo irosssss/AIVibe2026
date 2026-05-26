@@ -57,6 +57,7 @@ public final class StorageClient: StorageClientProtocol, @unchecked Sendable {
 
     /// Default storage directory in Caches.
     private static let defaultStorageDirectory: URL = {
+        // swiftlint:disable:next force_unwrapping
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AIVibeStorage")
     }()

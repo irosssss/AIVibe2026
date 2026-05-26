@@ -19,7 +19,7 @@ import Logging
 /// version: pinned v2
 /// rate_limit: 100 req/min
 /// ```
-public actor OzonConnector: Sendable {
+public actor OzonConnector {
 
     // MARK: - Configuration
 

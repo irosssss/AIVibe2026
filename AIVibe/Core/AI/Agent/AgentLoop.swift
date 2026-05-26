@@ -188,6 +188,7 @@ public actor AgentLoop {
     ///   - request: Запрос пользователя.
     ///   - session: Сессия (новая или существующая).
     /// - Returns: Результат работы агента.
+    // swiftlint:disable:next function_body_length
     public func run(
         request: UserRequest,
         session: AgentSession

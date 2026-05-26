@@ -220,8 +220,10 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
     // MARK: - Execute
 
     public func execute(validated: [String: Any]) async throws -> String {
+        // swiftlint:disable force_cast
         let query = validated["query"] as! String
         let categoryStr = validated["category"] as! String
+        // swiftlint:enable force_cast
         let budgetMaxRub = validated["budget_max_rub"] as? Int ?? 500_000
         let styleStr = validated["style"] as? String
         let marketplaceStr = validated["marketplace"] as? String ?? "all"

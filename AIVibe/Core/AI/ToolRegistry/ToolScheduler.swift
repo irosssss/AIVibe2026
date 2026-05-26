@@ -57,7 +57,7 @@ public struct ToolScheduler: Sendable {
             "draft": 3,
             "meta": 4,
             "action": 5,
-            "financial": 6,
+            "financial": 6
         ]
 
         // Группируем по приоритетам
