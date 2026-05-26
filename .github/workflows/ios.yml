@@ -88,6 +88,8 @@ jobs:
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
             -configuration Debug \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
             -quiet
 
   test:
@@ -139,4 +141,6 @@ jobs:
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
             -configuration Debug \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
             -quiet
