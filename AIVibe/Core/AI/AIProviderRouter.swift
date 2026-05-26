@@ -68,7 +68,7 @@ public actor AIProviderRouter {
     /// - Каждый fallback логируется в аналитику.
     /// - Возвращает результат первого успешного провайдера.
     /// - Если все провайдеры исчерпаны — бросает `allProvidersExhausted`.
-    private func routeRequest<T>(
+    private func routeRequest<T: Sendable>(
         _ operation: (any AIProviderProtocol) async throws -> T
     ) async throws -> T {
         var lastError: Error?
