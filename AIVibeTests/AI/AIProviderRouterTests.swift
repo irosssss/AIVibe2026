@@ -142,8 +142,9 @@ struct AIProviderRouterTests {
         )
 
         // Симулируем 3 провала YandexGPT → Circuit Breaker откроется
+        let breakers = await router.breakers
+        let cb = breakers["YandexGPT"]!
         for _ in 0..<3 {
-            let cb = router.breakers["YandexGPT"]!
             await cb.recordFailure()
         }
 
