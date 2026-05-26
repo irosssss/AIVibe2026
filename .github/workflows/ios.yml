@@ -8,12 +8,12 @@ on:
 
 env:
   SCHEME: "AIVibe"
-  DESTINATION: "platform=iOS Simulator,name=iPhone 15,OS=18.0"
+  DESTINATION: "platform=iOS Simulator,name=iPhone 16,OS=18.2"
 
 jobs:
   swiftlint:
     name: SwiftLint
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,11 +26,17 @@ jobs:
 
   build:
     name: Build
-    runs-on: macos-14
+    runs-on: macos-15
     needs: swiftlint
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Swift version
+        run: swift --version
 
       - name: Cache SPM packages
         uses: actions/cache@v4
@@ -54,11 +60,14 @@ jobs:
 
   test:
     name: Test
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
       - name: Cache SPM packages
         uses: actions/cache@v4
@@ -67,6 +76,9 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.swift') }}
           restore-keys: |
             ${{ runner.os }}-spm-
+
+      - name: Install xcpretty
+        run: gem install xcpretty
 
       - name: Run tests
         run: |
