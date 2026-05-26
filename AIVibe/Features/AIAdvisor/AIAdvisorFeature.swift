@@ -48,7 +48,7 @@ struct AIAdvisorFeature {
         var designAdvice: DesignAdvice?
 
         // Чат
-        var chatMessages: [ChatMessage] = []
+        var chatMessages: [AdvisorChatMessage] = []
         var currentInput: String = ""
     }
 
@@ -69,7 +69,7 @@ struct AIAdvisorFeature {
         case aiError(String)
 
         case sendChatMessage
-        case chatResponseReceived(ChatMessage)
+        case chatResponseReceived(AdvisorChatMessage)
 
         case resetToIdle
     }
@@ -140,7 +140,7 @@ struct AIAdvisorFeature {
                 state.designAdvice = advice
                 state.activeProvider = nil
                 // Добавляем в чат
-                let msg = ChatMessage(
+                let msg = AdvisorChatMessage(
                     text: advice.concept,
                     provider: advice.provider,
                     isUser: false
@@ -159,7 +159,7 @@ struct AIAdvisorFeature {
                 )
                 guard !input.isEmpty else { return .none }
 
-                let userMsg = ChatMessage(text: input, provider: "", isUser: true)
+                let userMsg = AdvisorChatMessage(text: input, provider: "", isUser: true)
                 state.chatMessages.append(userMsg)
                 state.currentInput = ""
                 state.phase = .awaitingAI
@@ -181,7 +181,7 @@ struct AIAdvisorFeature {
                     do {
                         let advice = try await self.aiAdvisorClient.getAdvice(request)
                         await send(.chatResponseReceived(
-                            ChatMessage(
+                            AdvisorChatMessage(
                                 text: advice.concept,
                                 provider: advice.provider,
                                 isUser: false
@@ -208,9 +208,9 @@ struct AIAdvisorFeature {
     }
 }
 
-// MARK: - ChatMessage
+// MARK: - AdvisorChatMessage
 
-struct ChatMessage: Identifiable, Equatable, Sendable {
+struct AdvisorChatMessage: Identifiable, Equatable, Sendable {
     let id = UUID()
     let text: String
     let provider: String
@@ -226,26 +226,34 @@ struct AIAdvisorClient: Sendable {
 
 // MARK: - Dependency Registration
 
+private struct AdvisorRequestBody: Encodable {
+    let prompt: String
+    let userId: String
+    let imageBase64: String
+}
+
+private struct AdvisorResponseBody: Decodable {
+    let text: String
+    let provider: String
+}
+
 extension AIAdvisorClient: DependencyKey {
     static let liveValue = AIAdvisorClient(
         getAdvice: { request in
-            // Вызов backend /ai-advisor через NetworkClient
-            let networkClient = NetworkClient(baseURL: "https://your-function-url")
+            let networkClient = NetworkClient()
             let prompt = request.buildYandexGPTPrompt()
-            let body: [String: Any] = [
-                "prompt": prompt,
-                "userId": "ios-device-id",
-                "imageBase64": request.imageAsBase64() ?? ""
-            ]
-            let response: [String: Any] = try await networkClient.post(
-                "/ai-advisor",
-                body: body
-            )
-            guard let text = response["text"] as? String,
-                  let provider = response["provider"] as? String else {
-                throw AIError.invalidResponse
+
+            guard let url = URL(string: "https://your-function-url/ai-advisor") else {
+                throw AIError.invalidResponse(provider: "backend", details: "Некорректный URL")
             }
-            return DesignAdvice.parse(from: text, provider: provider)
+
+            let body = AdvisorRequestBody(
+                prompt: prompt,
+                userId: "ios-device-id",
+                imageBase64: request.imageAsBase64() ?? ""
+            )
+            let response: AdvisorResponseBody = try await networkClient.post(url: url, body: body)
+            return DesignAdvice.parse(from: response.text, provider: response.provider)
         }
     )
 }

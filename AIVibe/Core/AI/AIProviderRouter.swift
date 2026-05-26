@@ -79,7 +79,7 @@ public actor AIProviderRouter {
             let allowed = await breaker.canRequest()
 
             guard allowed else {
-                let cooldown = breaker.cooldownRemaining
+                let cooldown = await breaker.cooldownRemaining
                 logger.info("⏸️  Пропускаем \(provider.name): Circuit Breaker открыт ещё \(Int(cooldown))с")
                 analytics.log(
                     event: "ai_circuit_breaker_skip",
@@ -107,10 +107,10 @@ public actor AIProviderRouter {
 
                 return result
 
-            } catch AIError.providerUnavailable {
+            } catch AIError.providerUnavailable(let providerName) {
                 // Провайдер не поддерживает операцию (например, vision) — идём дальше без записи провала
-                logger.info("⏩ \(provider.name): не поддерживает эту операцию")
-                lastError = error
+                logger.info("⏩ \(providerName): не поддерживает эту операцию")
+                lastError = AIError.providerUnavailable(provider: providerName)
                 continue
 
             } catch {

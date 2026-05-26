@@ -17,7 +17,7 @@ import Foundation
 /// - internalState / meta → allow
 ///
 /// Приоритет: deny > approval-gated > allow
-public actor PermissionEngine {
+public final class PermissionEngine: @unchecked Sendable {
 
     // MARK: - Custom Rules
 
@@ -60,7 +60,7 @@ public actor PermissionEngine {
 
         // 1. Кастомное правило
         if let rule = customRules[toolName] {
-            return rule.evaluate(toolName: toolName, riskClass: riskClass, arguments: arguments, context: sessionContext)
+            return rule.evaluate(toolName, riskClass, arguments, sessionContext)
         }
 
         // 2. Стандартная матрица

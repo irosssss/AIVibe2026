@@ -436,8 +436,8 @@ extension AgentSkill {
 public struct SkillState: Sendable, Codable {
     public let skillId: String
     public let loadedAt: Date
-    public let toolCallsCount: Int
-    public let lastUsedAt: Date?
+    public var toolCallsCount: Int
+    public var lastUsedAt: Date?
 
     public init(
         skillId: String,

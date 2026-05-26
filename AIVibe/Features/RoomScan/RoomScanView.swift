@@ -171,8 +171,9 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
 
     func makeUIView(context: Context) -> RoomCaptureView {
         let view = RoomCaptureView(frame: .zero)
-        view.captureSession = context.coordinator.session
         view.delegate = context.coordinator
+        // Используем встроенную сессию RoomCaptureView (read-only в iOS 18+)
+        context.coordinator.assignSession(view.captureSession)
         return view
     }
 
@@ -188,11 +189,12 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         )
     }
 
-    class Coordinator: NSObject, RoomCaptureViewDelegate {
+    @objc(RoomCaptureCoordinator)
+    class Coordinator: NSObject, RoomCaptureViewDelegate, NSCoding {
 
         // MARK: Session
 
-        let session = RoomCaptureSession()
+        private var session: RoomCaptureSession!
 
         // MARK: Callbacks
 
@@ -211,11 +213,26 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
             self.onError = onError
         }
 
+        // MARK: NSCoding
+
+        func encode(with coder: NSCoder) {}
+
+        required init?(coder: NSCoder) { return nil }
+
+        /// Принимает сессию от RoomCaptureView (read-only в iOS 18+).
+        func assignSession(_ session: RoomCaptureSession) {
+            self.session = session
+        }
+
         func startIfNeeded() {
-            guard !didStart else { return }
+            guard !didStart, let session else { return }
             didStart = true
-            // Register session so reducer can stop it
-            Task { await RoomScanSession.shared.register(session) }
+            // RoomCaptureSession не Sendable — оборачиваем для безопасной передачи в actor
+            struct SessionBox: @unchecked Sendable { let value: RoomCaptureSession }
+            let box = SessionBox(value: session)
+            Task {
+                await RoomScanSession.shared.register(box.value)
+            }
             let config = RoomCaptureSession.Configuration()
             session.run(configuration: config)
         }
@@ -223,23 +240,21 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         // MARK: RoomCaptureViewDelegate
 
         func captureView(
-            shouldPresentRoomDataFor capturingData: RoomCaptureView.CapturingData
+            shouldPresent roomDataForProcessing: CapturedRoomData,
+            error: (any Error)?
         ) -> Bool {
             true
         }
 
         func captureView(
-            _ captureView: RoomCaptureView,
-            didPresent processedRoom: CapturedRoom
+            didPresent processedResult: CapturedRoom,
+            error: (any Error)?
         ) {
-            onCapturedRoom(processedRoom)
-        }
-
-        func captureView(
-            _ captureView: RoomCaptureView,
-            didErrorWith error: Error
-        ) {
-            onError(error)
+            if let error {
+                onError(error)
+            } else {
+                onCapturedRoom(processedResult)
+            }
         }
     }
 }

@@ -850,13 +850,13 @@ final class AgentSessionDurabilityTests: XCTestCase {
 final class AgentSkillAutoLoadTests: XCTestCase {
 
     func test_skillIndex_matchesTriggerPhrases() async {
-        let index = SkillIndex.standard
+        let index = SkillIndex()
 
         // design_advisor triggers
         let advisorTriggers = ["помоги с дизайном", "какой стиль выбрать", "посоветуй интерьер"]
         for trigger in advisorTriggers {
             let matches = await index.matchingSkills(for: trigger)
-            XCTAssertTrue(matches.contains(where: { $0.id == "design_advisor" }),
+            XCTAssertTrue(matches.contains("design_advisor"),
                           "Фраза '\(trigger)' должна активировать design_advisor")
         }
 
@@ -864,7 +864,7 @@ final class AgentSkillAutoLoadTests: XCTestCase {
         let matcherTriggers = ["подбери мебель", "какой диван купить", "нужен стол"]
         for trigger in matcherTriggers {
             let matches = await index.matchingSkills(for: trigger)
-            XCTAssertTrue(matches.contains(where: { $0.id == "furniture_matcher" }),
+            XCTAssertTrue(matches.contains("furniture_matcher"),
                           "Фраза '\(trigger)' должна активировать furniture_matcher")
         }
 
@@ -872,13 +872,13 @@ final class AgentSkillAutoLoadTests: XCTestCase {
         let budgetTriggers = ["это дорого", "найди дешевле", "бюджет ограничен", "уложиться в бюджет"]
         for trigger in budgetTriggers {
             let matches = await index.matchingSkills(for: trigger)
-            XCTAssertTrue(matches.contains(where: { $0.id == "budget_optimizer" }),
+            XCTAssertTrue(matches.contains("budget_optimizer"),
                           "Фраза '\(trigger)' должна активировать budget_optimizer")
         }
     }
 
     func test_skillIndex_noMatchForNeutralPhrase() async {
-        let index = SkillIndex.standard
+        let index = SkillIndex()
         let matches = await index.matchingSkills(for: "привет, как дела?")
         XCTAssertTrue(matches.isEmpty, "Нейтральная фраза не должна активировать скиллы")
     }
@@ -933,7 +933,7 @@ final class ContextBuilderIntegrationTests: XCTestCase {
         let session = makeSession()
         let registry = ToolRegistry()
         registry.registerDomainTools()
-        let skillIndex = SkillIndex.standard
+        let skillIndex = SkillIndexSnapshot.standard
 
         // Заполняем сессию минимальными данными
         await session.setPlan(DesignPlan(objective: "Тестовый дизайн", steps: ["Шаг 1", "Шаг 2"]))
@@ -966,7 +966,7 @@ final class ContextBuilderIntegrationTests: XCTestCase {
         let session = makeSession()
         let registry = ToolRegistry()
         registry.registerDomainTools()
-        let skillIndex = SkillIndex.standard
+        let skillIndex = SkillIndexSnapshot.standard
 
         // Добавляем compaction summary
         await session.addCompactionSummary(CompactionSummary(

@@ -210,7 +210,7 @@ public struct AnalyzeRoomScanTool: AgentTool {
         // swiftlint:enable force_cast
 
         // На macOS с RealityKit — реальный парсинг USDZ
-        #if canImport(RealityKit) && os(visionOS) == false
+        #if canImport(RealityKit) && !os(visionOS)
         let analysis = try await parseUSDZRealityKit(usdzUri: usdzUri, roomId: roomId)
         #else
         // Windows / Linux / CI: mock-анализ с логом
@@ -222,7 +222,7 @@ public struct AnalyzeRoomScanTool: AgentTool {
 
     // MARK: - USDZ Parsing (macOS RealityKit)
 
-    #if canImport(RealityKit) && os(visionOS) == false
+    #if canImport(RealityKit) && !os(visionOS)
     private func parseUSDZRealityKit(usdzUri: String, roomId: String) async throws -> RoomAnalysis {
         // URL из строки
         guard let url = URL(string: usdzUri) ?? URL(fileURLWithPath: usdzUri) as URL? else {

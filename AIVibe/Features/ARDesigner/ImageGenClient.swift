@@ -4,6 +4,9 @@
 import ComposableArchitecture
 import Foundation
 
+/// Цветовое предложение (HEX-строка).
+public typealias ColorSuggestion = String
+
 struct GeneratedImage: Codable, Equatable, Identifiable {
     let id: UUID
     let url: URL
@@ -38,7 +41,7 @@ extension ImageGenClient: DependencyKey {
             let body: [String: Any] = [
                 "style": style.rawValue,
                 "roomType": roomType.rawValue,
-                "colorPalette": palette.map { $0.hex }.joined(separator: ", "),
+                "colorPalette": palette.joined(separator: ", "),
                 "userId": "current_user_id"
             ]
 

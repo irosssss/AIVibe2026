@@ -141,7 +141,7 @@ public actor AgentLoop {
     private let providerRouter: AIProviderRouter
 
     /// Индекс скиллов.
-    private let skillIndex: SkillIndex
+    private let skillIndex: SkillIndexSnapshot
 
     /// Permission engine.
     private let permissionEngine: PermissionEngine
@@ -164,7 +164,7 @@ public actor AgentLoop {
         contextBuilder: ContextBuilder = ContextBuilder(),
         toolRegistry: ToolRegistry,
         providerRouter: AIProviderRouter,
-        skillIndex: SkillIndex = .standard,
+        skillIndex: SkillIndexSnapshot = .standard,
         permissionEngine: PermissionEngine = PermissionEngine(),
         toolScheduler: ToolScheduler = ToolScheduler(),
         resultLimiter: ResultLimiter = ResultLimiter(),
@@ -264,14 +264,15 @@ public actor AgentLoop {
             // 6. Обрабатываем tool calls
             let orderedCalls = toolScheduler.order(modelOutput.toolCalls)
 
-            for call in orderedCalls {
+            for group in orderedCalls {
+            for call in group {
                 // Execute через ToolRegistry
                 let result = await toolRegistry.execute(call: call)
 
                 // Сохраняем результат в сессию
                 await session.addEvent(SessionEvent(
                     type: .toolResult,
-                    data: .json(result.toJSONString() ?? "{}"),
+                    data: .json(result.data),
                     step: step
                 ))
 
@@ -291,6 +292,7 @@ public actor AgentLoop {
                 if result.status == .denied {
                     logger.warning("🚫 Инструмент \(call.name) отклонён: \(result.data ?? "нет причины")")
                 }
+            }
             }
 
             // 7. Обрабатываем plan update (если модель прислала)
@@ -376,7 +378,8 @@ public actor AgentLoop {
                 for callDict in callsArray {
                     let name = callDict["name"] as? String ?? ""
                     let args = callDict["arguments"] as? [String: Any] ?? [:]
-                    let callId = callDict["id"] as? String ?? UUID().uuidString
+                    let callIdStr = callDict["id"] as? String ?? UUID().uuidString
+                    let callId = UUID(uuidString: callIdStr) ?? UUID()
                     toolCalls.append(ToolCallRequest(
                         id: callId,
                         name: name,
@@ -528,7 +531,7 @@ public actor AgentLoop {
     /// Во время планирования:
     /// - Allowed: analyze_room_scan, search_marketplace_furniture, recommend_style, read_resource, update_plan
     /// - Blocked: generate_arrangement_plan, draft_shopping_list, confirm_purchase_order, share_project_publicly
-    public func shouldActivatePlanningMode(request: UserRequest, roomAnalysis: RoomAnalysis?) -> Bool {
+    public func shouldActivatePlanningMode(request: UserRequest, roomAnalysis: PlanningRoomAnalysis?) -> Bool {
         // Большой бюджет
         if let budgetMax = request.budgetMax, budgetMax > 500_000 {
             return true
@@ -629,11 +632,11 @@ public actor SessionCompactor {
     }
 }
 
-// MARK: - RoomAnalysis placeholder (для shouldActivatePlanningMode)
+// MARK: - PlanningRoomAnalysis placeholder (для shouldActivatePlanningMode)
 
-/// Анализ комнаты — используется в планировании (Blueprint §7).
-/// Полная версия в AnalyzeRoomScanTool.
-public struct RoomAnalysis: Sendable {
+/// Упрощённый анализ комнаты — используется в планировании (Blueprint §7).
+/// Полная версия: RoomAnalysis в AnalyzeRoomScanTool.
+public struct PlanningRoomAnalysis: Sendable {
     public let roomDimensions: RoomDimensionsAnalysis
     public let objects: [DetectedObjectAnalysis]
     public let floorAreaM2: Double
@@ -649,6 +652,8 @@ public struct RoomDimensionsAnalysis: Sendable {
     public let widthM: Double
     public let depthM: Double
     public let heightM: Double
+
+    public var floorAreaM2: Double { widthM * depthM }
 
     public init(widthM: Double, depthM: Double, heightM: Double) {
         self.widthM = widthM
