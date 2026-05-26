@@ -165,6 +165,9 @@ struct RoomScanView: View {
 #if canImport(RoomPlan)
 import RoomPlan
 
+/// RoomCaptureSession не Sendable — обёртка для передачи в actor.
+private struct SessionBox: @unchecked Sendable { let value: RoomCaptureSession }
+
 struct RoomCaptureRepresentable: UIViewRepresentable {
     let onCapturedRoom: @Sendable (CapturedRoom) -> Void
     let onError: @Sendable (Error) -> Void
@@ -227,8 +230,6 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         func startIfNeeded() {
             guard !didStart, let session else { return }
             didStart = true
-            // RoomCaptureSession не Sendable — оборачиваем для безопасной передачи в actor
-            struct SessionBox: @unchecked Sendable { let value: RoomCaptureSession }
             let box = SessionBox(value: session)
             Task {
                 await RoomScanSession.shared.register(box.value)
