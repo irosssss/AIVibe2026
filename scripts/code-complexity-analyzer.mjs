@@ -1,145 +1,371 @@
 #!/usr/bin/env node
 /**
  * AIVibe Code Complexity Analyzer
- * Usage: node scripts/code-complexity-analyzer.mjs [--apply]
- * Run this from the project root (workspace).
+ *
+ * Сканирует кодовую базу на типовые архитектурные проблемы:
+ * рассинхрон констант, N+1 запросы, потерянные analytics-события,
+ * многопроходный парсинг, full-scan по БД.
+ *
+ * Запуск:
+ *   node scripts/code-complexity-analyzer.mjs
+ *
+ * Exit codes:
+ *   0 — все проверки прошли
+ *   1 — есть WARN'ы (в CI можно использовать как gate)
+ *   2 — внутренняя ошибка скрипта
+ *
+ * При добавлении новой проверки — следовать паттерну:
+ *   const check = checkSomething();
+ *   results.push(check);
+ *
+ * Все пути относительно корня репозитория.
  */
+
 import { readFileSync, existsSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 
+// ─── Конфиг ──────────────────────────────────────────────────────
+
 const ROOT = process.cwd();
 const REPORT_FILE = join(ROOT, 'complexity-report.md');
-const APPLY = process.argv.includes('--apply');
 
-function grep(filepath, pattern) {
-  if (!existsSync(filepath)) return 0;
-  const text = readFileSync(filepath, 'utf8');
-  const matches = text.match(new RegExp(pattern, 'g'));
-  return matches ? matches.length : 0;
+// Пути проекта (актуализированы под текущую структуру)
+const PATHS = {
+    // iOS
+    cbConfigSwift:   'AIVibe/Core/AI/CircuitBreakerConfig.swift',
+    cbSwift:         'AIVibe/Core/AI/CircuitBreaker.swift',
+    designAdvice:    'AIVibe/Features/AIAdvisor/Models/DesignAdvice.swift',
+    analytics:       'AIVibe/Core/Analytics/AppMetricaAnalytics.swift',
+    networkClient:   'AIVibe/Core/Network/NetworkClient.swift',
+    helpers:         'AIVibe/Core/AI/AIProviderHelpers.swift',
+    // Backend
+    cbConfigJs:      'backend/shared/circuit-config.js',
+    cbJs:            'backend/shared/circuit-breaker.js',
+    backendIndex:    'backend/index.js',
+    aiAdvisor:       'backend/functions/ai-advisor/index.js',
+    ragIndexer:      'backend/functions/rag-indexer/index.js',
+    ragSearch:       'backend/shared/rag-search.js',
+};
+
+// Пороги для warn-условий
+const THRESHOLDS = {
+    multiPassFirstIndex: 3,
+    ragSearchScanLimit:  100,
+    ragIndexerLoops:     3,
+    ragIndexerAwaits:    2,
+    analyticsCollisions: 1,
+};
+
+// ─── Утилиты ─────────────────────────────────────────────────────
+
+const COLORS = { reset: '\x1b[0m', red: '\x1b[31m', yellow: '\x1b[33m', green: '\x1b[32m', dim: '\x1b[2m' };
+
+function fileExists(relPath) {
+    return existsSync(join(ROOT, relPath));
 }
 
-function lines(filepath) {
-  if (!existsSync(filepath)) return 0;
-  return readFileSync(filepath, 'utf8').split('\n').length;
+function readFile(relPath) {
+    const full = join(ROOT, relPath);
+    if (!existsSync(full)) return null;
+    return readFileSync(full, 'utf8');
 }
 
-function log(msg, warn = false) {
-  console.log(`  ${warn ? '⚠️ ' : '▸ '}${msg}`);
+function countMatches(relPath, pattern) {
+    const text = readFile(relPath);
+    if (text === null) return null; // null = файл не найден (distinct from 0)
+    const matches = text.match(new RegExp(pattern, 'g'));
+    return matches ? matches.length : 0;
 }
 
-// ═══════════════════════════════════
-console.log('🔍 AIVibe Code Complexity Analyzer');
-console.log('═══════════════════════════════════');
-console.log(`Mode: ${APPLY ? '🛠  apply' : '📄  report only'}`);
-console.log();
-
-// ── 1. Circuit Breaker ──────────────────────────────────
-console.log('▸ 1. Circuit Breaker duplication');
-const cbSwift = grep(join(ROOT, 'AIVibe/Core/AI/CircuitBreaker.swift'), 'threshold|CircuitBreaker');
-const cbJs   = grep(join(ROOT, 'backend/index.js'), 'threshold|CircuitBreaker');
-log(`Swift refs=${cbSwift}, JS refs=${cbJs}`);
-const warn_cb = cbSwift > 0 && cbJs > 0;
-if (warn_cb) log('DUPLICATE: Circuit Breaker logic in both iOS and backend', true);
-
-// ── 2. Multi-pass parsing ───────────────────────────────
-console.log('▸ 2. Multi-pass parsing');
-const fiCount = grep(join(ROOT, 'AIVibe/Features/DesignAdvice/DesignAdvice.swift'), 'firstIndex');
-log(`firstIndex x${fiCount}`);
-const warn_fi = fiCount > 3;
-if (warn_fi) log(`MULTI-PASS: ${fiCount} array scans`, true);
-
-// ── 3. Dual backend ─────────────────────────────────────
-console.log('▸ 3. Backend entry points');
-const mainLines = lines(join(ROOT, 'backend/index.js'));
-const advLines  = lines(join(ROOT, 'backend/functions/ai-advisor/index.js'));
-log(`backend/index.js: ${mainLines} lines`);
-log(`ai-advisor/index.js: ${advLines} lines`);
-const warn_dual = mainLines > 0 && advLines > 0;
-if (warn_dual) log('DUAL ENTRY POINTS: diverged logic', true);
-
-// ── 4. RAG indexer N+1 ──────────────────────────────────
-console.log('▸ 4. RAG indexer N+1');
-const loops = grep(join(ROOT, 'backend/functions/rag-indexer/index.js'), 'for\\s*\\(');
-const awaits = grep(join(ROOT, 'backend/functions/rag-indexer/index.js'), 'await');
-log(`loops=${loops}, awaits=${awaits}`);
-const warn_rag = loops >= 3 && awaits >= 2;
-if (warn_rag) log(`SERIAL N+1: ${loops} loops → use Promise.allSettled`, true);
-
-// ── 5. RAG search scan ──────────────────────────��───────
-console.log('▸ 5. RAG search scan');
-const ragSrch = join(ROOT, 'backend/functions/rag-search/index.js');
-let limit = 0;
-if (existsSync(ragSrch)) {
-  const m = readFileSync(ragSrch, 'utf8').match(/limit:\s*(\d+)/);
-  if (m) limit = parseInt(m[1]);
+function lineCount(relPath) {
+    const text = readFile(relPath);
+    if (text === null) return null;
+    return text.split('\n').length;
 }
-log(`scan limit=${limit}`);
-const warn_scan = limit > 100;
-if (warn_scan) log(`FULL SCAN: ${limit} records in memory`, true);
 
-// ── 6. Analytics ────────────────────────────────────────
-console.log('▸ 6. Analytics events');
-const aiSent = grep(join(ROOT, 'AIVibe/Core/Analytics/AppMetricaAnalytics.swift'), 'aiRequestSent');
-log(`aiRequestSent refs=${aiSent}`);
-const warn_analytics = aiSent > 1;
-if (warn_analytics) log('EVENT LOSS: multiple events collapse to same case', true);
+function extractNumber(relPath, regex) {
+    const text = readFile(relPath);
+    if (text === null) return null;
+    const m = text.match(regex);
+    return m ? parseInt(m[1], 10) : null;
+}
 
-// ── 7. HTTP status ──────────────────────────────────────
-console.log('▸ 7. HTTP status handling');
-const n429 = grep(join(ROOT, 'AIVibe/Core/Network/NetworkClient.swift'), 'Retry-After');
-const h429 = grep(join(ROOT, 'AIVibe/Core/AI/AIProviderHelpers.swift'), 'Retry-After');
-log(`Retry-After: Network=${n429}, Helpers=${h429}`);
-const warn_http = n429 === 0 && h429 > 0;
-if (warn_http) log('NetworkClient missing Retry-After', true);
+function logCheck(num, title) {
+    console.log(`\n▸ ${num}. ${title}`);
+}
 
-// ── 8. Largest files ───────────────���───────��────────────
-console.log('▸ 8. Largest files');
+function logInfo(msg) {
+    console.log(`   ${COLORS.dim}${msg}${COLORS.reset}`);
+}
 
-function walk(dir, exts) {
-  const results = [];
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.name === 'node_modules' || entry.name === '.build') continue;
-      if (entry.isDirectory()) results.push(...walk(full, exts));
-      else if (exts.some(e => entry.name.endsWith(e)))
-        results.push({ path: full, size: statSync(full).size });
+function logWarn(msg) {
+    console.log(`   ${COLORS.yellow}⚠️  ${msg}${COLORS.reset}`);
+}
+
+function logOk(msg) {
+    console.log(`   ${COLORS.green}✅ ${msg}${COLORS.reset}`);
+}
+
+function logMissing(path) {
+    console.log(`   ${COLORS.red}❌ Файл не найден: ${path}${COLORS.reset}`);
+}
+
+// ─── Старт ───────────────────────────────────────────────────────
+
+console.log(`\n${COLORS.green}🔍 AIVibe Code Complexity Analyzer${COLORS.reset}`);
+console.log('═══════════════════════════════════════════════════');
+console.log(`Root: ${ROOT}`);
+
+const results = [];
+
+// ─── 1. Circuit Breaker: рассинхрон констант iOS ↔ backend ───────
+
+logCheck(1, 'Circuit Breaker — синхронизация констант');
+
+const swiftThreshold = extractNumber(PATHS.cbConfigSwift, /threshold:\s*(\d+)/);
+const swiftTimeout   = extractNumber(PATHS.cbConfigSwift, /timeout:\s*(\d+)/);
+const jsThreshold    = extractNumber(PATHS.cbConfigJs, /CIRCUIT_THRESHOLD\s*=\s*(\d+)/);
+const jsCooldownMs   = extractNumber(PATHS.cbConfigJs, /CIRCUIT_COOLDOWN_MS\s*=\s*(\d+)\s*\*\s*(\d+)_000/);
+
+if (swiftThreshold === null) logMissing(PATHS.cbConfigSwift);
+if (jsThreshold === null) logMissing(PATHS.cbConfigJs);
+
+// JS cooldown в миллисекундах — конвертируем в секунды
+const jsTimeoutSec = jsCooldownMs !== null
+    ? extractNumber(PATHS.cbConfigJs, /CIRCUIT_COOLDOWN_MS\s*=\s*(\d+)\s*\*\s*60_000/) * 60
+    : null;
+
+logInfo(`Swift: threshold=${swiftThreshold}, timeout=${swiftTimeout}s`);
+logInfo(`JS:    threshold=${jsThreshold}, cooldown=${jsTimeoutSec}s`);
+
+const warn_cb = (
+    swiftThreshold !== null && jsThreshold !== null && swiftThreshold !== jsThreshold
+) || (
+    swiftTimeout !== null && jsTimeoutSec !== null && swiftTimeout !== jsTimeoutSec
+);
+
+if (warn_cb) {
+    logWarn('РАССИНХРОН: Circuit Breaker константы различаются между iOS и backend!');
+} else if (swiftThreshold === jsThreshold && swiftTimeout === jsTimeoutSec) {
+    logOk('Константы синхронизированы');
+}
+results.push({ name: 'Circuit Breaker constants sync', warn: warn_cb });
+
+// ─── 2. Multi-pass parsing in DesignAdvice ───────────────────────
+
+logCheck(2, 'Multi-pass parsing (DesignAdvice.swift)');
+
+const fiCount = countMatches(PATHS.designAdvice, 'firstIndex');
+
+if (fiCount === null) {
+    logMissing(PATHS.designAdvice);
+    results.push({ name: 'Multi-pass parsing', warn: false, skipped: true });
+} else {
+    logInfo(`firstIndex × ${fiCount}`);
+    const warn_fi = fiCount > THRESHOLDS.multiPassFirstIndex;
+    if (warn_fi) {
+        logWarn(`${fiCount} проходов по массиву — рассмотреть single-pass парсер`);
+    } else {
+        logOk(`${fiCount} ≤ ${THRESHOLDS.multiPassFirstIndex} (порог)`);
     }
-  } catch {}
-  return results;
+    results.push({ name: 'Multi-pass parsing', warn: warn_fi });
 }
 
-const files = walk(ROOT, ['.swift', '.js'])
-  .sort((a, b) => b.size - a.size)
-  .slice(0, 8);
+// ─── 3. Backend entry points (информационно) ─────────────────────
+
+logCheck(3, 'Backend entry points (info)');
+
+const mainLines = lineCount(PATHS.backendIndex);
+const advLines  = lineCount(PATHS.aiAdvisor);
+
+if (mainLines !== null) logInfo(`${PATHS.backendIndex}: ${mainLines} строк`);
+else logMissing(PATHS.backendIndex);
+
+if (advLines !== null) logInfo(`${PATHS.aiAdvisor}: ${advLines} строк`);
+else logMissing(PATHS.aiAdvisor);
+
+// Проверяем что оба используют единый triplex-fallback (не дублируют логику)
+const mainUsesShared = readFile(PATHS.backendIndex)?.includes("from './shared/triplex-fallback")
+                    || readFile(PATHS.backendIndex)?.includes('shared/triplex-fallback');
+const advUsesShared  = readFile(PATHS.aiAdvisor)?.includes('triplex-fallback');
+
+const warn_dual = (mainLines !== null && advLines !== null)
+               && !(mainUsesShared && advUsesShared);
+
+if (mainUsesShared && advUsesShared) {
+    logOk('Оба entry-point используют shared/triplex-fallback — норма');
+} else if (warn_dual) {
+    logWarn('Один из entry-points НЕ использует shared/triplex-fallback — риск дублирования');
+}
+results.push({ name: 'Backend entry points use shared fallback', warn: warn_dual });
+
+// ─── 4. RAG indexer serial N+1 ────────────────────────────────────
+
+logCheck(4, 'RAG indexer — serial N+1 HTTP calls');
+
+const loops  = countMatches(PATHS.ragIndexer, 'for\\s*\\(');
+const awaits = countMatches(PATHS.ragIndexer, 'await');
+
+if (loops === null) {
+    logMissing(PATHS.ragIndexer);
+    results.push({ name: 'RAG indexer N+1', warn: false, skipped: true });
+} else {
+    logInfo(`loops=${loops}, awaits=${awaits}`);
+    const warn_rag = loops >= THRESHOLDS.ragIndexerLoops && awaits >= THRESHOLDS.ragIndexerAwaits;
+    // Дополнительно проверяем наличие parallelLimit / Promise.all — антидот к N+1
+    const hasParallel = readFile(PATHS.ragIndexer)?.match(/parallelLimit|Promise\.all/);
+    if (warn_rag && !hasParallel) {
+        logWarn(`${loops} циклов с ${awaits} awaits — serial N+1, нет Promise.all/parallelLimit`);
+    } else if (hasParallel) {
+        logOk('Найден parallelLimit / Promise.all — параллелизация присутствует');
+    } else {
+        logOk('Нет признаков N+1');
+    }
+    results.push({ name: 'RAG indexer N+1', warn: warn_rag && !hasParallel });
+}
+
+// ─── 5. RAG search — full scan лимит ──────────────────────────────
+
+logCheck(5, 'RAG search — full scan лимит');
+
+const ragSearchLimit = extractNumber(PATHS.ragSearch, /limit:\s*(\d+)/);
+
+if (ragSearchLimit === null) {
+    logMissing(PATHS.ragSearch);
+    results.push({ name: 'RAG search full scan', warn: false, skipped: true });
+} else {
+    logInfo(`scan limit = ${ragSearchLimit}`);
+    const warn_scan = ragSearchLimit > THRESHOLDS.ragSearchScanLimit;
+    if (warn_scan) {
+        logWarn(`Лимит ${ragSearchLimit} > ${THRESHOLDS.ragSearchScanLimit} — full scan загружает все записи в память`);
+        logWarn('Рассмотреть vector index в YDB или k-NN поиск');
+    } else {
+        logOk(`Лимит ${ragSearchLimit} ≤ ${THRESHOLDS.ragSearchScanLimit}`);
+    }
+    results.push({ name: 'RAG search full scan', warn: warn_scan });
+}
+
+// ─── 6. Analytics event loss ──────────────────────────────────────
+
+logCheck(6, 'Analytics — event loss (коллизия enum cases)');
+
+const aiSent = countMatches(PATHS.analytics, 'aiRequestSent');
+
+if (aiSent === null) {
+    logMissing(PATHS.analytics);
+    results.push({ name: 'Analytics event loss', warn: false, skipped: true });
+} else {
+    logInfo(`aiRequestSent упомянуто × ${aiSent}`);
+    const warn_analytics = aiSent > THRESHOLDS.analyticsCollisions;
+    if (warn_analytics) {
+        logWarn(`Несколько типов событий схлопываются в один enum case`);
+    } else {
+        logOk('Нет коллизий event-ов');
+    }
+    results.push({ name: 'Analytics event loss', warn: warn_analytics });
+}
+
+// ─── 7. HTTP status handling: Retry-After ─────────────────────────
+
+logCheck(7, 'HTTP status — Retry-After handling');
+
+const n429 = countMatches(PATHS.networkClient, 'Retry-After');
+const h429 = countMatches(PATHS.helpers, 'Retry-After');
+
+if (n429 === null) logMissing(PATHS.networkClient);
+if (h429 === null) logMissing(PATHS.helpers);
+
+if (n429 !== null && h429 !== null) {
+    logInfo(`Retry-After: NetworkClient=${n429}, AIProviderHelpers=${h429}`);
+    const warn_http = n429 === 0 && h429 > 0;
+    if (warn_http) {
+        logWarn('NetworkClient не обрабатывает Retry-After, хотя AIProviderHelpers — обрабатывает');
+    } else {
+        logOk('Retry-After обрабатывается согласованно');
+    }
+    results.push({ name: 'Retry-After handling', warn: warn_http });
+}
+
+// ─── 8. Largest files (info, not a check) ─────────────────────────
+
+logCheck(8, 'Largest files (top 8 .swift/.js)');
+
+function walk(dir, exts, ignore = ['node_modules', '.build', '.git']) {
+    const results = [];
+    try {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            if (ignore.includes(entry.name)) continue;
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) results.push(...walk(full, exts, ignore));
+            else if (exts.some(e => entry.name.endsWith(e))) {
+                results.push({ path: full, size: statSync(full).size });
+            }
+        }
+    } catch {}
+    return results;
+}
+
+const files = walk(ROOT, ['.swift', '.js']).sort((a, b) => b.size - a.size).slice(0, 8);
 
 for (const f of files) {
-  const rel = relative(ROOT, f.path);
-  console.log(`    ${(f.size / 1024).toFixed(1)} KB  ${rel}`);
+    const rel = relative(ROOT, f.path);
+    console.log(`   ${(f.size / 1024).toFixed(1).padStart(6)} KB  ${rel}`);
 }
 
-// ══════════════════════════════════════
-const report = [
-  '# Code Complexity Report',
-  `Generated: ${new Date().toISOString()}`,
-  '',
-  '## Summary',
-  '',
-  '| Check | Status |',
-  '|---|---|',
-  `| Circuit Breaker duplication | ${warn_cb ? '⚠️ WARN' : '✅ OK'} |`,
-  `| Multi-pass parsing | ${warn_fi ? '⚠️ WARN' : '✅ OK'} |`,
-  `| Dual backend entry points | ${warn_dual ? '⚠️ WARN' : '✅ OK'} |`,
-  `| RAG indexer serial N+1 | ${warn_rag ? '⚠️ WARN' : '✅ OK'} |`,
-  `| RAG search full scan | ${warn_scan ? '⚠️ WARN' : '✅ OK'} |`,
-  `| Analytics event loss | ${warn_analytics ? '⚠️ WARN' : '✅ OK'} |`,
-  `| Retry-After handling | ${warn_http ? '⚠️ WARN' : '✅ OK'} |`,
+// ─── Финальный отчёт ──────────────────────────────────────────────
+
+const warnCount = results.filter(r => r.warn).length;
+const skipCount = results.filter(r => r.skipped).length;
+const okCount = results.length - warnCount - skipCount;
+
+console.log('\n═══════════════════════════════════════════════════');
+console.log(`Итого: ${okCount} ✅   ${warnCount} ⚠️    ${skipCount} ⏭`);
+
+// ─── Markdown отчёт ───────────────────────────────────────────────
+
+const reportLines = [
+    '# Code Complexity Report',
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    `Script: \`scripts/code-complexity-analyzer.mjs\``,
+    '',
+    '## Сводка',
+    '',
+    `- ✅ OK: ${okCount}`,
+    `- ⚠️  WARN: ${warnCount}`,
+    `- ⏭  Skipped (файлы не найдены): ${skipCount}`,
+    '',
+    '## Проверки',
+    '',
+    '| # | Проверка | Статус |',
+    '|---|----------|--------|',
 ];
 
-writeFileSync(REPORT_FILE, report.join('\n') + '\n', 'utf8');
+results.forEach((r, i) => {
+    const status = r.skipped ? '⏭ SKIPPED' : (r.warn ? '⚠️ WARN' : '✅ OK');
+    reportLines.push(`| ${i + 1} | ${r.name} | ${status} |`);
+});
 
-console.log();
-console.log('═══════════════════════════════════════════════');
-console.log(`✅ Done. Report: ${REPORT_FILE}`);
-if (APPLY) console.log('🛠  Safe optimizations applied.');
-console.log('═══════════════════════════════════════════════');
+reportLines.push('');
+reportLines.push('## Топ-8 файлов по размеру');
+reportLines.push('');
+reportLines.push('| Размер | Путь |');
+reportLines.push('|--------|------|');
+files.forEach(f => {
+    const rel = relative(ROOT, f.path);
+    reportLines.push(`| ${(f.size / 1024).toFixed(1)} KB | \`${rel}\` |`);
+});
+
+reportLines.push('');
+reportLines.push('---');
+reportLines.push('');
+reportLines.push('Запуск: `node scripts/code-complexity-analyzer.mjs`');
+reportLines.push('При наличии WARN скрипт завершается с exit code 1 — можно использовать как CI gate.');
+
+writeFileSync(REPORT_FILE, reportLines.join('\n') + '\n', 'utf8');
+
+console.log(`Отчёт: ${REPORT_FILE}`);
+console.log('═══════════════════════════════════════════════════\n');
+
+// Exit code: 1 если есть warn'ы (для CI)
+process.exit(warnCount > 0 ? 1 : 0);
