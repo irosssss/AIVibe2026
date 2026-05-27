@@ -590,7 +590,9 @@ public struct RecommendStyleTool: AgentTool {
     }
 
     private func paletteForStyle(_ style: InteriorStyle, lighting: LightingType) -> ColorPalette {
-        let brightness: Float = lighting == .dim ? 1.15 : 1.0
+        // TODO: применить brightness-множитель к цветам палитры (lighting == .dim → 1.15)
+        // когда будет реализован тонкий тюнинг цветов под освещение.
+        _ = lighting
 
         switch style {
         case .scandinavian:
