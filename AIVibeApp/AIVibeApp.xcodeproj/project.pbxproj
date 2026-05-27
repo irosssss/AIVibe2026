@@ -114,7 +114,7 @@
 			mainGroup = C17E0E272FC6DBD200C7EE30;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				C17E0E3E2FC6DED600C7EE30 /* XCLocalSwiftPackageReference "../../AIVibe2026" */,
+				C17E0E3E2FC6DED600C7EE30 /* XCLocalSwiftPackageReference ".." */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C17E0E312FC6DBD200C7EE30 /* Products */;
@@ -372,9 +372,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		C17E0E3E2FC6DED600C7EE30 /* XCLocalSwiftPackageReference "../../AIVibe2026" */ = {
+		C17E0E3E2FC6DED600C7EE30 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../AIVibe2026;
+			relativePath = ..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
