@@ -187,10 +187,23 @@ public actor LangfuseExporter {
             .span
         }
 
+        // Langfuse: для trace-create body.id ЯВЛЯЕТСЯ trace id.
+        // Для span/generation body.id — уникальный id события, traceId ссылается на родительский trace.
+        // Чтобы lifecycle-события (sessionStart/End) попадали в тот же trace, что и spans —
+        // используем sessionId как body.id для .trace, и record.id для .span/.generation.
+        let traceId = record.sessionId ?? record.id
+        let bodyId: String
+        switch eventType {
+        case .trace:
+            bodyId = traceId
+        case .span, .generation:
+            bodyId = record.id
+        }
+
         return LangfuseEvent(
             type: eventType,
-            id: record.id,
-            traceId: record.sessionId ?? record.id,
+            id: bodyId,
+            traceId: traceId,
             name: record.eventType.rawValue,
             startTime: ISO8601DateFormatter().string(from: record.timestamp),
             metadata: record.metadata,
@@ -226,12 +239,44 @@ public actor LangfuseExporter {
 
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw LangfuseError.httpError(statusCode: code)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LangfuseError.httpError(statusCode: -1)
+        }
+
+        let status = httpResponse.statusCode
+
+        // Langfuse ingestion возвращает 207 Multi-Status с per-event ошибками в body
+        // (валидация схемы, неверный type, и т.п.). Парсим тело и логируем отказы;
+        // если ВСЕ события отклонены — бросаем ошибку и засчитываем как провал.
+        if status == 207 {
+            let report = (try? JSONDecoder().decode(LangfuseIngestionResponse.self, from: data))
+            let rejected = report?.errors?.count ?? 0
+            let accepted = report?.successes?.count ?? max(0, events.count - rejected)
+
+            if rejected > 0 {
+                let preview = report?.errors?.prefix(3)
+                    .map { "[\($0.id ?? "?") status=\($0.status ?? -1) \($0.message ?? $0.error ?? "")]" }
+                    .joined(separator: " ") ?? ""
+                logger.warning(
+                    "Langfuse 207: отклонено \(rejected)/\(events.count) событий — \(preview)"
+                )
+                // Если ни одно событие не принято — это полный провал, тригерим circuit breaker
+                if accepted == 0 {
+                    throw LangfuseError.partialFailure(rejected: rejected, accepted: 0)
+                }
+            }
+            logger.debug("Langfuse: отправлено \(accepted)/\(events.count) событий (HTTP 207)")
+            return
+        }
+
+        guard (200...299).contains(status) else {
+            // Логируем тело ответа для диагностики (ограничиваем размер)
+            if let body = String(data: data, encoding: .utf8), !body.isEmpty {
+                logger.warning("Langfuse HTTP \(status): \(body.prefix(500))")
+            }
+            throw LangfuseError.httpError(statusCode: status)
         }
 
         logger.debug("Langfuse: отправлено \(events.count) событий")
@@ -284,15 +329,37 @@ struct LangfuseBatchPayload: Sendable, Codable {
     let batch: [LangfuseIngestionEvent]
 }
 
+/// Ответ Langfuse `/api/public/ingestion` (HTTP 207 Multi-Status).
+/// Содержит списки принятых и отклонённых событий.
+struct LangfuseIngestionResponse: Sendable, Decodable {
+    let successes: [Success]?
+    let errors: [IngestionError]?
+
+    struct Success: Sendable, Decodable {
+        let id: String?
+        let status: Int?
+    }
+
+    struct IngestionError: Sendable, Decodable {
+        let id: String?
+        let status: Int?
+        let message: String?
+        let error: String?
+    }
+}
+
 // MARK: - Langfuse Error
 
 enum LangfuseError: LocalizedError, Sendable {
     case httpError(statusCode: Int)
+    case partialFailure(rejected: Int, accepted: Int)
     case notConfigured
 
     var errorDescription: String? {
         switch self {
         case .httpError(let code): "Langfuse HTTP ошибка: \(code)"
+        case .partialFailure(let rejected, let accepted):
+            "Langfuse частичный отказ: отклонено \(rejected), принято \(accepted)"
         case .notConfigured: "Langfuse не настроен (отсутствуют ключи)"
         }
     }
