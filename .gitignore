@@ -3,9 +3,12 @@
 build/
 DerivedData/
 *.xcuserdata
+*.xcuserdatad/
 *.xcscmblueprint
 *.xcconfig
 *.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -23,7 +26,10 @@ DerivedData/
 
 ## CocoaPods
 Pods/
-*.xcworkspace
+# Top-level .xcworkspace (CocoaPods) — этот репозиторий использует SPM, не CocoaPods.
+# Если когда-нибудь появится Podfile — добавь сюда: MyApp.xcworkspace
+# (а .xcodeproj/project.xcworkspace и .swiftpm/xcode/package.xcworkspace —
+#  это нормальные Xcode-генерируемые workspace и должны быть в репо.)
 
 ## Carthage
 Carthage/Build/
