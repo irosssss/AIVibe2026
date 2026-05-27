@@ -60,7 +60,7 @@ struct AIAdvisorChatView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Composer(
                     text: $store.currentInput,
-                    onSend: { store.send(.sendChatMessage) },
+                    onSend: { sendMessage() },
                     onAttach: { /* placeholder */ },
                     budget: budget
                 )
@@ -79,6 +79,19 @@ struct AIAdvisorChatView: View {
                     toolCalls = []
                 }
             }
+        }
+    }
+
+    // MARK: - Dispatch
+
+    /// Маршрутизирует send в нужный action reducer'а.
+    /// Если у пользователя приложено фото — идём в полный image-pipeline
+    /// (`.sendChatMessage`). Иначе — text-only path (demo mock).
+    private func sendMessage() {
+        if store.sourceImage != nil {
+            store.send(.sendChatMessage)
+        } else {
+            store.send(.sendTextOnlyMessage)
         }
     }
 
@@ -137,7 +150,7 @@ struct AIAdvisorChatView: View {
                         SuggestionRow(suggestion: sug) {
                             Haptics.selection()
                             store.currentInput = sug.text
-                            store.send(.sendChatMessage)
+                            sendMessage()
                         }
                     }
                 }

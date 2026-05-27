@@ -219,7 +219,7 @@ struct ScanActiveScreenView: View {
                 progress: progress,
                 onFinish: {
                     Haptics.success()
-                    store.send(.scanFinished(Data()))
+                    finishScan()
                 }
             )
         }
@@ -227,7 +227,7 @@ struct ScanActiveScreenView: View {
             // Auto-stop при достижении threshold + min surfaces.
             guard complete else { return }
             Haptics.success()
-            store.send(.scanFinished(Data()))
+            finishScan()
         }
         .onAppear {
             #if targetEnvironment(simulator)
@@ -249,6 +249,24 @@ struct ScanActiveScreenView: View {
         .onDisappear {
             simulatorTimerCancel?.cancel()
         }
+    }
+
+    /// Завершение скана.
+    ///
+    /// - На реальном устройстве: просим `RoomCaptureSession` остановиться.
+    ///   RoomPlan вызовет `captureView(didPresent:)` в Coordinator'е, тот
+    ///   экспортирует USDZ и пошлёт `.scanFinished(realData)` через
+    ///   `onCapturedRoom`. **Сами `.scanFinished` отсюда НЕ диспатчим**,
+    ///   иначе уберём `RoomCaptureRepresentableV2` до финализации и потеряем
+    ///   реальный CapturedRoom.
+    /// - На симуляторе: RoomPlan недоступен, поэтому short-circuit'им
+    ///   пустым `Data()` для дизайн-демо.
+    private func finishScan() {
+        #if targetEnvironment(simulator)
+        store.send(.scanFinished(Data()))
+        #else
+        Task { await RoomScanSession.shared.stop() }
+        #endif
     }
 }
 
