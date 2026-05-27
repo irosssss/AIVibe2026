@@ -232,10 +232,11 @@ public actor ToolRegistry {
     ) async throws -> String {
         let timeout = tool.timeout
 
+        let box = SendableBox(validated)
         return try await withThrowingTaskGroup(of: String.self) { group in
             // Задача выполнения
             group.addTask {
-                try await tool.execute(validated: validated)
+                try await tool.execute(validated: box.value)
             }
 
             // Задача таймаута
@@ -301,7 +302,7 @@ private enum AgentLoopKey: DependencyKey {
         }
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.liveValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [])
         )
     }()
 
@@ -309,7 +310,7 @@ private enum AgentLoopKey: DependencyKey {
         let registry = ToolRegistry()
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.testValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [])
         )
     }()
 
@@ -320,7 +321,7 @@ private enum AgentLoopKey: DependencyKey {
         }
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.previewValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [MockAIProvider()])
         )
     }()
 }

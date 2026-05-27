@@ -160,13 +160,13 @@ public enum EnvironmentLoader {
             let value = String(parts[1]).trimmingCharacters(in: .whitespaces)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
 
-            setenv(key, value, 1)
+            Darwin.setenv(key, value, 1)
         }
     }
 
     /// Устанавливает одну переменную окружения.
     public static func setenv(_ name: String, _ value: String) {
-        setenv(name, value, 1)
+        Darwin.setenv(name, value, 1)
     }
 }
 

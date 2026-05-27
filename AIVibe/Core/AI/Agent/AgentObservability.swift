@@ -611,7 +611,7 @@ public actor EvalProbeRunner {
     /// Проверяет launch gates (Blueprint §13: Launch gates checklist).
     /// - Returns: `true` если все launch-gate пробы пройдены.
     public func allLaunchGatesPassed() -> Bool {
-        let launchGateResults = results.filter { _, probeId in
+        let launchGateResults = results.filter { probeId, _ in
             EvalProbe.standardProbes.first(where: { $0.id == probeId })?.isLaunchGate ?? false
         }
         return launchGateResults.values.allSatisfy(\.passed)

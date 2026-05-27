@@ -58,7 +58,7 @@ public struct ContextBuilder: Sendable {
     public func build(
         session: AgentSession,
         toolRegistry: ToolRegistry? = nil,
-        skillIndex: SkillIndex? = nil
+        skillIndex: SkillIndexSnapshot? = nil
     ) async -> AgentContext {
 
         var sections: [ContextSection] = []
@@ -130,7 +130,7 @@ public struct ContextBuilder: Sendable {
     private func buildSystemInstructions() -> ContextSection {
         ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: """
             Ты — AI-ассистент по дизайну интерьеров в приложении AIVibe.
             Твоя задача: помогать пользователям создавать дизайн интерьера их комнат.
@@ -163,7 +163,7 @@ public struct ContextBuilder: Sendable {
     private func buildHarnessPolicy() -> ContextSection {
         ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: """
             ## Harness Policy
 
@@ -189,7 +189,7 @@ public struct ContextBuilder: Sendable {
     private func buildDomainPolicy() -> ContextSection {
         ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: """
             ## Domain Policy — Дизайн Интерьеров
 
@@ -254,13 +254,13 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: content
         )
     }
 
     /// 5. Skill index.
-    private func buildSkillIndexSection(_ skillIndex: SkillIndex?) -> ContextSection? {
+    private func buildSkillIndexSection(_ skillIndex: SkillIndexSnapshot?) -> ContextSection? {
         guard let skills = skillIndex, !skills.availableSkills.isEmpty else { return nil }
 
         let skillList = skills.availableSkills.map { skill in
@@ -269,7 +269,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: """
             ## Доступные скиллы
 
@@ -290,17 +290,17 @@ public struct ContextBuilder: Sendable {
         let toolDefs = tools.sorted(by: { $0.name < $1.name }).map { tool in
             """
             ### \(tool.name)
-            - **Назначение:** \(tool.purpose)
+            - **Назначение:** \(tool.description)
             - **Risk Class:** \(tool.riskClass.rawValue)
-            - **Side Effects:** \(tool.hasSideEffects ? "ЕСТЬ" : "нет")
+            - **Side Effects:** \(tool.sideEffects == .none ? "нет" : tool.sideEffects.rawValue)
             - **Timeout:** \(tool.timeout)с
-            - **Input:** \(tool.inputSchema.description)
+            - **Input:** \(tool.inputSchema.required.joined(separator: ", "))
             """
         }.joined(separator: "\n")
 
         return ContextSection(
             level: .trusted,
-            role: "system",
+            role: .system,
             content: """
             ## Доступные инструменты
 
@@ -316,7 +316,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .data,
-            role: "system",
+            role: .system,
             content: """
             ## [DATA] Анализ комнаты
 
@@ -338,7 +338,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .data,
-            role: "system",
+            role: .system,
             content: """
             ## [DATA] Результаты поиска мебели
 
@@ -358,7 +358,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .data,
-            role: "system",
+            role: .system,
             content: """
             ## [DATA] Рекомендация стиля
 
@@ -383,7 +383,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .data,
-            role: "system",
+            role: .system,
             content: """
             ## Последние результаты инструментов
 
@@ -415,7 +415,7 @@ public struct ContextBuilder: Sendable {
 
         return ContextSection(
             level: .trusted,
-            role: "user",
+            role: .user,
             content: content
         )
     }
@@ -504,41 +504,44 @@ public struct ContextSection: Sendable, Identifiable {
     }
 }
 
-// MARK: - Skill Index
+// MARK: - Skill Info
 
-/// Индекс доступных скиллов (Blueprint §10).
-public struct SkillIndex: Sendable {
+/// Краткая информация о скилле (Blueprint §10).
+public struct SkillInfo: Sendable, Identifiable {
+    public let id: String
+    public let description: String
+    public let triggerPhrases: [String]
+    public let allowedTools: [String]
+    public let forbiddenTools: [String]
+
+    public init(
+        id: String,
+        description: String,
+        triggerPhrases: [String],
+        allowedTools: [String],
+        forbiddenTools: [String]
+    ) {
+        self.id = id
+        self.description = description
+        self.triggerPhrases = triggerPhrases
+        self.allowedTools = allowedTools
+        self.forbiddenTools = forbiddenTools
+    }
+}
+
+// MARK: - Skill Index Snapshot
+
+/// Снимок индекса скиллов для контекста (Blueprint §10).
+public struct SkillIndexSnapshot: Sendable {
     /// Доступные скиллы.
     public let availableSkills: [SkillInfo]
-
-    public struct SkillInfo: Sendable, Identifiable {
-        public let id: String
-        public let description: String
-        public let triggerPhrases: [String]
-        public let allowedTools: [String]
-        public let forbiddenTools: [String]
-
-        public init(
-            id: String,
-            description: String,
-            triggerPhrases: [String],
-            allowedTools: [String],
-            forbiddenTools: [String]
-        ) {
-            self.id = id
-            self.description = description
-            self.triggerPhrases = triggerPhrases
-            self.allowedTools = allowedTools
-            self.forbiddenTools = forbiddenTools
-        }
-    }
 
     public init(availableSkills: [SkillInfo] = []) {
         self.availableSkills = availableSkills
     }
 
     /// Стандартный набор скиллов (Blueprint §10).
-    public static let standard: SkillIndex = SkillIndex(
+    public static let standard = SkillIndexSnapshot(
         availableSkills: [
             SkillInfo(
                 id: "design_advisor",

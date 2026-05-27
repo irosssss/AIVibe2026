@@ -239,7 +239,7 @@ public struct OzonProduct: Sendable, Codable, Identifiable {
     public let reviewCount: Int?
     public let inStock: Bool
 
-    public init(from item: OzonItem) {
+    init(from item: OzonItem) {
         self.id = String(item.id)
         self.name = item.name
         self.priceRub = Int(item.price)

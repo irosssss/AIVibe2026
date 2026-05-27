@@ -52,8 +52,8 @@ struct MarketplaceFeature {
             case .appeared:
                 // Если пришли из DesignResultView (SESSION_05) с готовым советом
                 if let advice = state.prefillFromAdvice {
-                    state.query = advice.furniturePieces.first?.name ?? ""
-                    state.selectedStyle = advice.style
+                    state.query = advice.furniture.first ?? ""
+                    // Стиль берём из текущего состояния (установлен при навигации)
                     return .send(.searchTapped)
                 }
                 return .none
@@ -69,7 +69,7 @@ struct MarketplaceFeature {
 
                 return .run { send in
                     let result = await Result {
-                        try await client.recommend(query: query, style: style, budget: budget)
+                        try await client.recommend(query, style, budget)
                     }
                     await send(.productsLoaded(result))
                 }

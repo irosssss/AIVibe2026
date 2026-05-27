@@ -142,8 +142,9 @@ struct AIProviderRouterTests {
         )
 
         // Симулируем 3 провала YandexGPT → Circuit Breaker откроется
+        let breakers = await router.breakers
+        let cb = breakers["YandexGPT"]!
         for _ in 0..<3 {
-            let cb = router.breakers["YandexGPT"]!
             await cb.recordFailure()
         }
 
@@ -167,14 +168,17 @@ struct AIProviderRouterTests {
 
     @Test("Circuit Breaker сбрасывается после таймаута (cooldown истекает)")
     func test_circuitBreakerResetsAfterTimeout() async throws {
-        let cb = CircuitBreaker(threshold: 2, timeout: 0.001)
+        // Timeout 0.5с — достаточно, чтобы первая проверка canRequest() == false
+        // успела выполниться до истечения cooldown даже на медленном CI.
+        let cb = CircuitBreaker(threshold: 2, timeout: 0.5)
 
         await cb.recordFailure()
         await cb.recordFailure()
 
         #expect(await cb.canRequest() == false)
 
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // Спим 600мс — гарантированно дольше cooldown (500мс)
+        try await Task.sleep(nanoseconds: 600_000_000)
 
         #expect(await cb.canRequest() == true)
     }

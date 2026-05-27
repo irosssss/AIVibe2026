@@ -227,7 +227,7 @@ public struct WBProduct: Sendable, Codable, Identifiable {
     public let reviewCount: Int?
     public let inStock: Bool
 
-    public init(from card: WBCard) {
+    init(from card: WBCard) {
         self.id = String(card.nmID)
         self.name = card.title
         self.priceRub = card.price

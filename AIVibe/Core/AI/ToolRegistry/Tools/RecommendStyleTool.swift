@@ -363,7 +363,7 @@ public struct RecommendStyleTool: AgentTool {
 
         let moodBoardRefs = generateMoodBoardRefs(
             primary: primary.style,
-            alternatives: alternatives.map(\.style.style)
+            alternatives: alternatives.map(\.style)
         )
 
         return StyleRecommendation(
@@ -514,9 +514,8 @@ public struct RecommendStyleTool: AgentTool {
             // Негативные предпочтения
             let negativeWords = ["тёмный", "мрачный", "холодный", "скучный", "старый"]
             for neg in negativeWords where prefs.contains(neg) {
-                    // Не штрафуем — просто не добавляем баллы
-                    break
-                }
+                // Не штрафуем — просто не добавляем баллы
+                break
             }
         }
 
