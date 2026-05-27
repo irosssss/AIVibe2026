@@ -25,6 +25,11 @@ struct AIAdvisorChatView: View {
     /// В проде — обновляются из AgentLoop.run events.
     @State private var toolCalls: [ToolCallIndicator] = []
 
+    /// ID последнего AI-сообщения, которое сейчас «стримится» (посимвольно).
+    @State private var streamingMessageId: UUID?
+    /// Накопленный текст текущего стриминга.
+    @State private var streamingText: String = ""
+
     /// Колбэк наружу — тап по карточке мебели в inline-карусели.
     let onProductTap: (ChatFurnitureItem) -> Void
 
@@ -65,6 +70,9 @@ struct AIAdvisorChatView: View {
                     budget: budget
                 )
             }
+            .onChange(of: store.chatMessages.count) { _, count in
+                startStreamingIfNeeded(count: count)
+            }
             .onChange(of: store.phase) { _, newPhase in
                 // Демо-индикаторы tool-вызовов на время «AI думает».
                 // В проде заменится на events из AgentLoop.run.
@@ -83,6 +91,40 @@ struct AIAdvisorChatView: View {
     }
 
     // MARK: - Dispatch
+
+    /// Запускает стриминг для последнего AI-сообщения, если оно новое.
+    private func startStreamingIfNeeded(count: Int) {
+        guard count > 0 else { return }
+        let last = store.chatMessages[count - 1]
+        guard !last.isUser else { return }
+        streamingMessageId = last.id
+        streamingText = ""
+        streamText(last.text, messageId: last.id)
+    }
+
+    /// Посимвольное (по 3 символа / 30 мс) раскрытие текста AI-ответа.
+    private func streamText(_ fullText: String, messageId: UUID) {
+        var chunks: [String] = []
+        var idx = fullText.startIndex
+        while idx < fullText.endIndex {
+            let end = fullText.index(
+                idx, offsetBy: 3,
+                limitedBy: fullText.endIndex
+            ) ?? fullText.endIndex
+            chunks.append(String(fullText[idx..<end]))
+            idx = end
+        }
+        Task { @MainActor in
+            for chunk in chunks {
+                guard streamingMessageId == messageId else { return }
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                streamingText += chunk
+            }
+            if streamingMessageId == messageId {
+                streamingMessageId = nil
+            }
+        }
+    }
 
     /// Маршрутизирует send в нужный action reducer'а.
     /// Если у пользователя приложено фото — идём в полный image-pipeline
@@ -177,10 +219,21 @@ struct AIAdvisorChatView: View {
                             UserBubble(text: msg.text)
                         } else {
                             AIBubble(
-                                text: msg.text,
+                                text: msg.id == streamingMessageId ? streamingText : msg.text,
                                 provider: msg.provider.isEmpty ? nil : msg.provider,
-                                streaming: false
+                                streaming: msg.id == streamingMessageId
                             )
+                        }
+                    }
+
+                    // Слайдер «до/после» — показывается, если AI вернул результат
+                    // для загруженного фото комнаты.
+                    if store.designAdvice != nil && store.sourceImage != nil {
+                        VStack(alignment: .leading, spacing: 8) {
+                            CapsLabel("До / После")
+                                .padding(.horizontal, 16)
+                            BeforeAfterSlider(beforeTone: .sand, afterTone: .sage)
+                                .padding(.horizontal, 16)
                         }
                     }
 

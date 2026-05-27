@@ -593,3 +593,93 @@ struct SuggestionRow: View {
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - BeforeAfterSlider (До/После AI-дизайн)
+
+/// Интерактивный слайдер сравнения «до» и «после» AI-редизайна.
+/// Пользователь тянет разделитель — левая сторона показывает оригинал,
+/// правая — результат AI.
+struct BeforeAfterSlider: View {
+    let beforeTone: AIPhotoTone
+    let afterTone: AIPhotoTone
+
+    @State private var splitRatio: CGFloat = 0.5
+    @Environment(\.aiColors) private var c
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                // Слой «до» — полная ширина.
+                PhotoSlot(tone: beforeTone, cornerRadius: 0, aspectRatio: nil)
+                    .frame(width: geo.size.width, height: geo.size.height)
+
+                // Слой «после» — маскируется до splitRatio.
+                PhotoSlot(tone: afterTone, cornerRadius: 0, aspectRatio: nil)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .mask(
+                        Rectangle()
+                            .frame(width: geo.size.width * splitRatio)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    )
+
+                // Вертикальная линия разделителя.
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 2, height: geo.size.height)
+                    .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 0)
+                    .offset(x: geo.size.width * splitRatio - 1)
+
+                // Ручка перетаскивания.
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 34, height: 34)
+                        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 2)
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(c.terracotta)
+                }
+                .position(x: geo.size.width * splitRatio, y: geo.size.height / 2)
+
+                // Метки «До» и «После AI».
+                VStack {
+                    HStack {
+                        Text("До")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.black.opacity(0.42), in: Capsule())
+                            .padding(.leading, 10)
+                            .padding(.top, 10)
+                        Spacer()
+                        Text("После AI")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(c.terracotta.opacity(0.85), in: Capsule())
+                            .padding(.trailing, 10)
+                            .padding(.top, 10)
+                    }
+                    Spacer()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let ratio = value.location.x / max(geo.size.width, 1)
+                        splitRatio = min(0.95, max(0.05, ratio))
+                    }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .aspectRatio(4.0 / 3.0, contentMode: .fit)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Сравнение до и после AI-дизайна. Потяните разделитель для сравнения.")
+        .accessibilityHint("Смахните влево или вправо для перемещения разделителя")
+    }
+}

@@ -94,17 +94,20 @@ public struct ProductDetailFeature: Sendable {
         public var isFavorite: Bool
         public var currentPage: Int        // для page-dots в hero
         public var isDescriptionExpanded: Bool
+        public var isAddedToProject: Bool  // оптимистичное состояние кнопки
 
         public init(
             product: ProductDetail,
             isFavorite: Bool = true,
             currentPage: Int = 0,
-            isDescriptionExpanded: Bool = false
+            isDescriptionExpanded: Bool = false,
+            isAddedToProject: Bool = false
         ) {
             self.product = product
             self.isFavorite = isFavorite
             self.currentPage = currentPage
             self.isDescriptionExpanded = isDescriptionExpanded
+            self.isAddedToProject = isAddedToProject
         }
     }
 
@@ -133,8 +136,10 @@ public struct ProductDetailFeature: Sendable {
             case let .pageChanged(idx):
                 state.currentPage = idx
                 return .none
-            case .backTapped, .shareTapped, .fitCardTapped,
-                 .viewInARTapped, .addToProjectTapped:
+            case .addToProjectTapped:
+                state.isAddedToProject = true
+                return .none
+            case .backTapped, .shareTapped, .fitCardTapped, .viewInARTapped:
                 return .none
             }
         }

@@ -381,20 +381,33 @@ public struct ProductDetailView: View {
             .frame(maxWidth: .infinity)
 
             Button {
+                guard !store.isAddedToProject else { return }
                 Haptics.success()
                 store.send(.addToProjectTapped)
             } label: {
-                Text("Добавить в проект")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(c.terracotta,
-                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                HStack(spacing: 6) {
+                    if store.isAddedToProject {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                    Text(store.isAddedToProject ? "Добавлено" : "Добавить в проект")
+                        .font(.system(size: 17, weight: .semibold))
+                        .contentTransition(.numericText())
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    store.isAddedToProject ? c.sage : c.terracotta,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .animation(.spring(duration: 0.3), value: store.isAddedToProject)
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
             .layoutPriority(1)
+            .accessibilityLabel(store.isAddedToProject ? "Добавлено в проект" : "Добавить в проект")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

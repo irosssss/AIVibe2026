@@ -38,6 +38,22 @@ struct ARDesignerView: View {
         ZStack {
             ARSceneBackground()
                 .ignoresSafeArea()
+                .accessibilityHidden(true)
+
+            // VoiceOver: невидимые элементы на позициях каждой вещи в AR-сцене.
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                ForEach(Array(store.items.enumerated()), id: \.element.id) { idx, item in
+                    Color.clear
+                        .frame(width: 80, height: 60)
+                        .position(arAccessibilityPoint(idx: idx, w: w, h: h))
+                        .accessibilityElement()
+                        .accessibilityLabel(arAccessibilityLabel(item: item, idx: idx))
+                        .accessibilityAddTraits(.isStaticText)
+                }
+            }
+            .ignoresSafeArea()
 
             VStack {
                 ARTopBar(
@@ -123,6 +139,23 @@ struct ARDesignerView: View {
             .presentationBackground(.regularMaterial)
         }
         .preferredColorScheme(.dark)
+    }
+
+    /// Приблизительные позиции мебели в AR-сцене (совпадают с Canvas в ARSceneBackground).
+    private func arAccessibilityPoint(idx: Int, w: CGFloat, h: CGFloat) -> CGPoint {
+        switch idx {
+        case 0: return CGPoint(x: w * 0.35, y: h * 0.62) // диван, слева
+        case 1: return CGPoint(x: w * 0.50, y: h * 0.78) // стол, по центру
+        case 2: return CGPoint(x: w * 0.83, y: h * 0.62) // кресло, справа
+        case 3: return CGPoint(x: w * 0.83, y: h * 0.45) // торшер, справа вверх
+        default: return CGPoint(x: w * 0.5, y: h * 0.5)
+        }
+    }
+
+    private func arAccessibilityLabel(item: ARFurnitureItem, idx: Int) -> String {
+        let zones = ["слева от центра", "по центру", "справа", "справа, у стены"]
+        let zone = zones.indices.contains(idx) ? zones[idx] : ""
+        return "\(item.title), \(item.subtitle), \(aiFmtRub(item.price)), \(zone)"
     }
 
     /// Высота нижнего sheet (грубо), чтобы FAB не перекрывался.
