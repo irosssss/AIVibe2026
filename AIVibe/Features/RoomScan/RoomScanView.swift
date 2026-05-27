@@ -246,7 +246,11 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
             shouldPresent roomDataForProcessing: CapturedRoomData,
             error: (any Error)?
         ) -> Bool {
-            true
+            if let error {
+                onError(error)
+                return false
+            }
+            return true
         }
 
         func captureView(

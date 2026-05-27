@@ -321,7 +321,7 @@ private enum AgentLoopKey: DependencyKey {
         }
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: AIProviderRouter(providers: [])
+            providerRouter: AIProviderRouter(providers: [MockAIProvider()])
         )
     }()
 }
