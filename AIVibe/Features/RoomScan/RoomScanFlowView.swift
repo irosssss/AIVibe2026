@@ -45,9 +45,12 @@ struct RoomScanFlowView: View {
     var body: some View {
         AIThemeReader {
             switch store.phase {
-            case .intro:    ScanIntroScreenView(store: store, onClose: onClose)
-            case .scanning: ScanActiveScreenView(store: store)
-            case .result:   ScanResultScreenView(store: store, onContinue: onContinueWithResult)
+            case .intro:          ScanIntroScreenView(store: store, onClose: onClose)
+            case .scanning:       ScanActiveScreenView(store: store)
+            case .result:         ScanResultScreenView(store: store)
+            case .styleSelection: StylePickerView(store: store)
+            case .generating:     DesignGeneratingView(store: store)
+            case .designComplete: DesignCompleteView(store: store, onContinue: onContinueWithResult)
             }
         }
     }
@@ -192,6 +195,7 @@ struct ScanActiveScreenView: View {
             RoomCaptureRepresentableV2(
                 progress: progress,
                 onCapturedRoom: { [store] room in
+                    Task { await RoomScanSession.shared.storeCapturedRoom(room) }
                     let url = FileManager.default.temporaryDirectory
                         .appendingPathComponent("scan_\(UUID().uuidString).usdz")
                     do {
@@ -458,7 +462,6 @@ private struct ScanProgressBar: View {
 
 struct ScanResultScreenView: View {
     @Bindable var store: StoreOf<RoomScanFlowFeature>
-    let onContinue: () -> Void
 
     @Environment(\.aiColors) private var c
     @Environment(\.colorScheme) private var scheme
@@ -582,10 +585,9 @@ struct ScanResultScreenView: View {
                         Haptics.warning()
                         store.send(.rescanTapped)
                     }
-                    PrimaryButton("Продолжить") {
+                    PrimaryButton("Выбрать стиль") {
                         Haptics.medium()
-                        store.send(.continueTapped)
-                        onContinue()
+                        store.send(.selectStyleTapped)
                     }
                     .layoutPriority(1)
                 }

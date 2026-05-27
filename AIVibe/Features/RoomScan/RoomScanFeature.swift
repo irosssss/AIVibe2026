@@ -93,6 +93,7 @@ public actor RoomScanSession {
 
     #if canImport(RoomPlan)
     private weak var activeSession: RoomCaptureSession?
+    private var lastCapturedRoom: CapturedRoom?
 
     public func register(_ session: RoomCaptureSession) {
         activeSession = session
@@ -102,8 +103,34 @@ public actor RoomScanSession {
         activeSession?.stop()
         activeSession = nil
     }
+
+    public func storeCapturedRoom(_ room: CapturedRoom) {
+        lastCapturedRoom = room
+    }
+
+    public func checkQuality() async -> QualityReport {
+        guard let room = lastCapturedRoom else {
+            return QualityReport(score: 0, issues: [.noFloor])
+        }
+        return await ScanAgent().check(room)
+    }
+
+    public func extractGeometry() async throws -> RoomGeometry {
+        guard let room = lastCapturedRoom else {
+            throw RoomGeometryError.noSurfaces
+        }
+        return try await AnalyzerAgent().extract(room)
+    }
     #else
     public func register(_ session: Any) {}
     public func stop() {}
+
+    public func checkQuality() async -> QualityReport {
+        QualityReport(score: 0, issues: [.partialScan])
+    }
+
+    public func extractGeometry() async throws -> RoomGeometry {
+        throw RoomGeometryError.noSurfaces
+    }
     #endif
 }

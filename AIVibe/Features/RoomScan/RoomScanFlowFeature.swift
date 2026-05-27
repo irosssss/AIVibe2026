@@ -4,6 +4,7 @@
 
 import ComposableArchitecture
 import Foundation
+import Logging
 
 // MARK: - Domain DTO
 
@@ -39,6 +40,9 @@ public enum RoomScanFlowPhase: Equatable, Sendable {
     case intro
     case scanning
     case result
+    case styleSelection
+    case generating
+    case designComplete
 }
 
 // MARK: - Reducer
@@ -52,6 +56,12 @@ public struct RoomScanFlowFeature: Sendable {
         public var metrics: RoomMetrics
         public var detectedObjects: [ScanResultObject]
         public var rawScanData: Data?
+        public var qualityReport: QualityReport?
+        public var geometry: RoomGeometry?
+        public var designPreferences: UserDesignPreferences?
+        public var isGeneratingDesign: Bool = false
+        public var designPlan: RoomDesignPlan?
+        public var designError: String?
 
         public init(
             phase: RoomScanFlowPhase = .intro,
@@ -61,7 +71,6 @@ public struct RoomScanFlowFeature: Sendable {
             self.phase = phase
             self.metrics = metrics
             self.detectedObjects = detectedObjects
-            self.rawScanData = nil
         }
     }
 
@@ -75,7 +84,18 @@ public struct RoomScanFlowFeature: Sendable {
         case continueTapped
         case backFromResultTapped
         case editObjectTapped(ScanResultObject.ID)
+        // Пайплайн дизайна
+        case qualityReportReceived(QualityReport)
+        case geometryExtracted(RoomGeometry)
+        case selectStyleTapped
+        case preferencesSet(UserDesignPreferences)
+        case generateDesignTapped
+        case designGenerated(RoomDesignPlan)
+        case designGenerationFailed(String)
+        case backFromStyleTapped
     }
+
+    @Dependency(\.agentOrchestrator) var agentOrchestrator
 
     public init() {}
 
@@ -89,26 +109,91 @@ public struct RoomScanFlowFeature: Sendable {
             case let .scanFinished(data):
                 state.phase = .result
                 state.rawScanData = data
-                return .none
+                return .run { send in
+                    let quality = await RoomScanSession.shared.checkQuality()
+                    await send(.qualityReportReceived(quality))
+                    if quality.canProceed {
+                        if let geometry = try? await RoomScanSession.shared.extractGeometry() {
+                            await send(.geometryExtracted(geometry))
+                        }
+                    }
+                }
 
             case .scanFailed:
-                // На MVP — возврат в intro. В будущем — отдельный error-screen.
                 state.phase = .intro
                 return .none
 
             case .rescanTapped:
                 state.phase = .scanning
+                state.qualityReport = nil
+                state.geometry = nil
+                state.designPlan = nil
+                state.designError = nil
                 return .none
 
             case .backFromResultTapped:
                 state.phase = .intro
                 return .none
 
+            case let .qualityReportReceived(report):
+                state.qualityReport = report
+                return .none
+
+            case let .geometryExtracted(geometry):
+                state.geometry = geometry
+                state.metrics = RoomMetrics(
+                    area: String(format: "%.0f м²", geometry.area),
+                    height: String(format: "%.1f м", geometry.ceilingHeight),
+                    objectsCount: geometry.doors.count + geometry.windows.count
+                )
+                return .none
+
+            case .selectStyleTapped:
+                state.phase = .styleSelection
+                return .none
+
+            case let .preferencesSet(prefs):
+                state.designPreferences = prefs
+                return .none
+
+            case .generateDesignTapped:
+                guard let geometry = state.geometry,
+                      let prefs = state.designPreferences else { return .none }
+                state.phase = .generating
+                state.isGeneratingDesign = true
+                state.designError = nil
+                return .run { send in
+                    do {
+                        let plan = try await agentOrchestrator.generateDesign(
+                            geometry: geometry,
+                            preferences: prefs
+                        )
+                        await send(.designGenerated(plan))
+                    } catch {
+                        await send(.designGenerationFailed(error.localizedDescription))
+                    }
+                }
+
+            case let .designGenerated(plan):
+                state.isGeneratingDesign = false
+                state.designPlan = plan
+                state.phase = .designComplete
+                return .none
+
+            case let .designGenerationFailed(msg):
+                state.isGeneratingDesign = false
+                state.designError = msg
+                state.phase = .styleSelection
+                return .none
+
+            case .backFromStyleTapped:
+                state.phase = .result
+                return .none
+
             case .closeTapped,
                  .manualEntryTapped,
                  .continueTapped,
                  .editObjectTapped:
-                // Делегируется наверх (App-shell — pop / push).
                 return .none
             }
         }
