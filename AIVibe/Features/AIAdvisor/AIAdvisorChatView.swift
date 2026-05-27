@@ -71,8 +71,8 @@ struct AIAdvisorChatView: View {
                 switch newPhase {
                 case .awaitingAI, .processingImage:
                     toolCalls = [
-                        .init(kind: .analyzingRoom,     detail: "Гостиная 18 м²"),
-                        .init(kind: .searching,         detail: "Ozon · WB"),
+                        .init(kind: .analyzingRoom, detail: "Гостиная 18 м²"),
+                        .init(kind: .searching, detail: "Ozon · WB"),
                         .init(kind: .matchingFurniture, detail: "до 50 000 ₽")
                     ]
                 default:
@@ -191,7 +191,7 @@ struct AIAdvisorChatView: View {
                         ApprovalCard(
                             approval: approval,
                             onConfirm: { pendingApproval = nil },
-                            onCancel:  { pendingApproval = nil }
+                            onCancel: { pendingApproval = nil }
                         )
                     }
 
@@ -210,9 +210,9 @@ struct AIAdvisorChatView: View {
 
     private static let suggestions: [ChatSuggestion] = [
         .init(icon: "sparkles", text: "Как выбрать стиль для гостиной?"),
-        .init(icon: "cube",     text: "Что делать с маленькой кухней 8 м²?"),
-        .init(icon: "bag",      text: "Подбери диван до 50 000 ₽"),
-        .init(icon: "ruler",    text: "Какая высота столешницы оптимальна?")
+        .init(icon: "cube", text: "Что делать с маленькой кухней 8 м²?"),
+        .init(icon: "bag", text: "Подбери диван до 50 000 ₽"),
+        .init(icon: "ruler", text: "Какая высота столешницы оптимальна?")
     ]
 }
 

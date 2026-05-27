@@ -119,7 +119,7 @@ struct ScanIntroScreenView: View {
                         }
 
                         VStack(spacing: 12) {
-                            ForEach(tips, id: \.0) { (icon, text) in
+                            ForEach(tips, id: \.0) { icon, text in
                                 HStack(spacing: 14) {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 10).fill(c.sandSoft)

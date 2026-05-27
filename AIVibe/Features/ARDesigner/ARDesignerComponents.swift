@@ -26,32 +26,32 @@ struct ARSceneBackground: View {
 
             GeometryReader { geo in
                 Canvas { ctx, _ in
-                    let W = geo.size.width
-                    let H = geo.size.height
+                    let w = geo.size.width
+                    let h = geo.size.height
 
                     // Пол — параллельные линии.
                     var floor = Path()
                     for i in 0..<12 {
-                        let y = H * 0.58 + CGFloat(i) * 30
+                        let y = h * 0.58 + CGFloat(i) * 30
                         floor.move(to: CGPoint(x: 0, y: y))
-                        floor.addLine(to: CGPoint(x: W, y: y))
+                        floor.addLine(to: CGPoint(x: w, y: y))
                     }
                     ctx.stroke(floor, with: .color(.white.opacity(0.05)), lineWidth: 1)
 
                     // Углы стен.
                     var walls = Path()
-                    walls.move(to: CGPoint(x: 30, y: H * 0.23))
-                    walls.addLine(to: CGPoint(x: 30, y: H * 0.7))
-                    walls.move(to: CGPoint(x: W - 30, y: H * 0.23))
-                    walls.addLine(to: CGPoint(x: W - 30, y: H * 0.7))
-                    walls.move(to: CGPoint(x: 30, y: H * 0.23))
-                    walls.addLine(to: CGPoint(x: W - 30, y: H * 0.23))
+                    walls.move(to: CGPoint(x: 30, y: h * 0.23))
+                    walls.addLine(to: CGPoint(x: 30, y: h * 0.7))
+                    walls.move(to: CGPoint(x: w - 30, y: h * 0.23))
+                    walls.addLine(to: CGPoint(x: w - 30, y: h * 0.7))
+                    walls.move(to: CGPoint(x: 30, y: h * 0.23))
+                    walls.addLine(to: CGPoint(x: w - 30, y: h * 0.23))
                     ctx.stroke(walls, with: .color(.black.opacity(0.18)), lineWidth: 1.5)
 
                     // AR-диван (terracotta outline + полупрозрачная заливка).
                     var sofa = Path()
-                    let baseY = H * 0.66
-                    let topY = H * 0.58
+                    let baseY = h * 0.66
+                    let topY = h * 0.58
                     sofa.move(to: CGPoint(x: 40, y: baseY))
                     sofa.addLine(to: CGPoint(x: 40, y: topY))
                     sofa.addLine(to: CGPoint(x: 260, y: topY))
@@ -61,26 +61,26 @@ struct ARSceneBackground: View {
                     ctx.stroke(sofa, with: .color(Color(hex: 0xD17F62, alpha: 0.95)), lineWidth: 2)
 
                     // Стол (эллипс).
-                    let tableRect = CGRect(x: W / 2 - 80, y: H * 0.78 - 12, width: 160, height: 36)
+                    let tableRect = CGRect(x: w / 2 - 80, y: h * 0.78 - 12, width: 160, height: 36)
                     ctx.fill(Path(ellipseIn: tableRect), with: .color(Color(hex: 0xD6B589, alpha: 0.55)))
                     ctx.stroke(Path(ellipseIn: tableRect), with: .color(Color(hex: 0xD17F62, alpha: 0.9)), lineWidth: 2)
 
                     // Кресло (sage).
                     var chair = Path()
-                    chair.move(to: CGPoint(x: W - 100, y: H * 0.66))
-                    chair.addLine(to: CGPoint(x: W - 100, y: H * 0.58))
-                    chair.addLine(to: CGPoint(x: W - 40, y: H * 0.58))
-                    chair.addLine(to: CGPoint(x: W - 40, y: H * 0.66))
+                    chair.move(to: CGPoint(x: w - 100, y: h * 0.66))
+                    chair.addLine(to: CGPoint(x: w - 100, y: h * 0.58))
+                    chair.addLine(to: CGPoint(x: w - 40, y: h * 0.58))
+                    chair.addLine(to: CGPoint(x: w - 40, y: h * 0.66))
                     chair.closeSubpath()
                     ctx.fill(chair, with: .color(Color(hex: 0x9CB497, alpha: 0.45)))
                     ctx.stroke(chair, with: .color(Color(hex: 0x9CB497, alpha: 0.95)), lineWidth: 2)
 
                     // Торшер.
                     var lampStem = Path()
-                    lampStem.move(to: CGPoint(x: W - 60, y: H * 0.32))
-                    lampStem.addLine(to: CGPoint(x: W - 60, y: H * 0.66))
+                    lampStem.move(to: CGPoint(x: w - 60, y: h * 0.32))
+                    lampStem.addLine(to: CGPoint(x: w - 60, y: h * 0.66))
                     ctx.stroke(lampStem, with: .color(Color(hex: 0xD17F62, alpha: 0.85)), lineWidth: 1.6)
-                    let bulbRect = CGRect(x: W - 60 - 22, y: H * 0.32 - 14, width: 44, height: 28)
+                    let bulbRect = CGRect(x: w - 60 - 22, y: h * 0.32 - 14, width: 44, height: 28)
                     ctx.fill(Path(ellipseIn: bulbRect), with: .color(Color(hex: 0xEFE0C2, alpha: 0.65)))
                     ctx.stroke(Path(ellipseIn: bulbRect), with: .color(Color(hex: 0xD17F62, alpha: 0.9)), lineWidth: 2)
 

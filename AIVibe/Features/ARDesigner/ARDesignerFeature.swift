@@ -113,9 +113,9 @@ public struct ARDesignerFeature: Sendable {
     }
 
     public static let mockItems: [ARFurnitureItem] = [
-        .init(title: "Диван IKEA Скандинавия", subtitle: "240 см · лён",       price: 45_990, tone: .sand,  market: .ozon),
-        .init(title: "Стол круглый дуб",       subtitle: "110 см · массив",    price: 12_500, tone: .taupe, market: .wildberries),
-        .init(title: "Кресло Хюгге",           subtitle: "букле, светлое",     price: 18_500, tone: .sage,  market: .wildberries),
-        .init(title: "Торшер с абажуром",      subtitle: "165 см · ткань",     price:  8_990, tone: .cream, market: .ozon)
+        .init(title: "Диван IKEA Скандинавия", subtitle: "240 см · лён", price: 45_990, tone: .sand, market: .ozon),
+        .init(title: "Стол круглый дуб", subtitle: "110 см · массив", price: 12_500, tone: .taupe, market: .wildberries),
+        .init(title: "Кресло Хюгге", subtitle: "букле, светлое", price: 18_500, tone: .sage, market: .wildberries),
+        .init(title: "Торшер с абажуром", subtitle: "165 см · ткань", price: 8_990, tone: .cream, market: .ozon)
     ]
 }

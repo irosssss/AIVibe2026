@@ -34,45 +34,45 @@ public struct AIColors: Sendable {
     public let fieldBg: Color
 
     public static let light = AIColors(
-        bg:               Color(hex: 0xF6F2EB),
-        bgSubtle:         Color(hex: 0xEFEAE1),
-        surface:          Color(hex: 0xFFFCF6),
-        elevated:         Color(hex: 0xFFFFFF),
-        onSurface:        Color(hex: 0x1C1916),
-        onSurfaceMuted:   Color(hex: 0x6E665B),
-        onSurfaceFaint:   Color(hex: 0xA39B8E),
-        divider:          Color(hex: 0x1C1916, alpha: 0.08),
-        hairline:         Color(hex: 0x1C1916, alpha: 0.06),
-        terracotta:       Color(hex: 0xC2674A),
-        terracottaSoft:   Color(hex: 0xE8C9BC),
-        sage:             Color(hex: 0x88A084),
-        sageSoft:         Color(hex: 0xCFDCC8),
-        sand:             Color(hex: 0xD6B589),
-        sandSoft:         Color(hex: 0xEFE0C2),
-        amber:            Color(hex: 0xDD9F4A),
-        danger:           Color(hex: 0xB5503A),
-        fieldBg:          Color(hex: 0xEFEAE1)
+        bg: Color(hex: 0xF6F2EB),
+        bgSubtle: Color(hex: 0xEFEAE1),
+        surface: Color(hex: 0xFFFCF6),
+        elevated: Color(hex: 0xFFFFFF),
+        onSurface: Color(hex: 0x1C1916),
+        onSurfaceMuted: Color(hex: 0x6E665B),
+        onSurfaceFaint: Color(hex: 0xA39B8E),
+        divider: Color(hex: 0x1C1916, alpha: 0.08),
+        hairline: Color(hex: 0x1C1916, alpha: 0.06),
+        terracotta: Color(hex: 0xC2674A),
+        terracottaSoft: Color(hex: 0xE8C9BC),
+        sage: Color(hex: 0x88A084),
+        sageSoft: Color(hex: 0xCFDCC8),
+        sand: Color(hex: 0xD6B589),
+        sandSoft: Color(hex: 0xEFE0C2),
+        amber: Color(hex: 0xDD9F4A),
+        danger: Color(hex: 0xB5503A),
+        fieldBg: Color(hex: 0xEFEAE1)
     )
 
     public static let dark = AIColors(
-        bg:               Color(hex: 0x15130F),
-        bgSubtle:         Color(hex: 0x1A1814),
-        surface:          Color(hex: 0x1F1C17),
-        elevated:         Color(hex: 0x2A2620),
-        onSurface:        Color(hex: 0xF1ECE2),
-        onSurfaceMuted:   Color(hex: 0xA09889),
-        onSurfaceFaint:   Color(hex: 0x6E665B),
-        divider:          Color(hex: 0xF1ECE2, alpha: 0.10),
-        hairline:         Color(hex: 0xF1ECE2, alpha: 0.07),
-        terracotta:       Color(hex: 0xD17F62),
-        terracottaSoft:   Color(hex: 0x4A2E22),
-        sage:             Color(hex: 0x9CB497),
-        sageSoft:         Color(hex: 0x2E3A2C),
-        sand:             Color(hex: 0xE0C091),
-        sandSoft:         Color(hex: 0x3D3325),
-        amber:            Color(hex: 0xE5AC5F),
-        danger:           Color(hex: 0xC2624A),
-        fieldBg:          Color(hex: 0x2A2620)
+        bg: Color(hex: 0x15130F),
+        bgSubtle: Color(hex: 0x1A1814),
+        surface: Color(hex: 0x1F1C17),
+        elevated: Color(hex: 0x2A2620),
+        onSurface: Color(hex: 0xF1ECE2),
+        onSurfaceMuted: Color(hex: 0xA09889),
+        onSurfaceFaint: Color(hex: 0x6E665B),
+        divider: Color(hex: 0xF1ECE2, alpha: 0.10),
+        hairline: Color(hex: 0xF1ECE2, alpha: 0.07),
+        terracotta: Color(hex: 0xD17F62),
+        terracottaSoft: Color(hex: 0x4A2E22),
+        sage: Color(hex: 0x9CB497),
+        sageSoft: Color(hex: 0x2E3A2C),
+        sand: Color(hex: 0xE0C091),
+        sandSoft: Color(hex: 0x3D3325),
+        amber: Color(hex: 0xE5AC5F),
+        danger: Color(hex: 0xC2624A),
+        fieldBg: Color(hex: 0x2A2620)
     )
 
     /// Возвращает палитру под текущую colorScheme.
@@ -130,14 +130,14 @@ public enum AIType: Sendable {
 
     public var spec: Spec {
         switch self {
-        case .largeTitle: return .init(size: 34, weight: .bold,     leading: 41, tracking: 0.37)
-        case .title1:     return .init(size: 28, weight: .bold,     leading: 34, tracking: 0.36)
-        case .title2:     return .init(size: 22, weight: .bold,     leading: 28, tracking: 0.35)
+        case .largeTitle: return .init(size: 34, weight: .bold, leading: 41, tracking: 0.37)
+        case .title1:     return .init(size: 28, weight: .bold, leading: 34, tracking: 0.36)
+        case .title2:     return .init(size: 22, weight: .bold, leading: 28, tracking: 0.35)
         case .title3:     return .init(size: 20, weight: .semibold, leading: 25, tracking: 0.38)
         case .headline:   return .init(size: 17, weight: .semibold, leading: 22, tracking: -0.43)
-        case .body:       return .init(size: 17, weight: .regular,  leading: 22, tracking: -0.43)
-        case .callout:    return .init(size: 16, weight: .regular,  leading: 21, tracking: -0.32)
-        case .caption:    return .init(size: 13, weight: .regular,  leading: 18, tracking: -0.08)
+        case .body:       return .init(size: 17, weight: .regular, leading: 22, tracking: -0.43)
+        case .callout:    return .init(size: 16, weight: .regular, leading: 21, tracking: -0.32)
+        case .caption:    return .init(size: 13, weight: .regular, leading: 18, tracking: -0.08)
         }
     }
 

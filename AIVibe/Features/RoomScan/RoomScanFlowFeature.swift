@@ -115,10 +115,10 @@ public struct RoomScanFlowFeature: Sendable {
     }
 
     public static let mockObjects: [ScanResultObject] = [
-        .init(name: "Окно",     icon: "square.split.2x1"),
-        .init(name: "Дверь",    icon: "door.left.hand.closed"),
+        .init(name: "Окно", icon: "square.split.2x1"),
+        .init(name: "Дверь", icon: "door.left.hand.closed"),
         .init(name: "Радиатор", icon: "thermometer.medium"),
-        .init(name: "Шкаф",     icon: "cube"),
-        .init(name: "Стол",     icon: "cube")
+        .init(name: "Шкаф", icon: "cube"),
+        .init(name: "Стол", icon: "cube")
     ]
 }

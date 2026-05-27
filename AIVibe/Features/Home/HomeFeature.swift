@@ -106,10 +106,10 @@ public struct HomeFeature: Sendable {
     // MARK: - Mock data (визуальная демонстрация по design ref)
 
     public static let mockProjects: [HomeProject] = [
-        HomeProject(name: "Гостиная",  tone: "sand", step: 3, totalSteps: 5,
+        HomeProject(name: "Гостиная", tone: "sand", step: 3, totalSteps: 5,
                     currentBudget: 245_000, maxBudget: 350_000),
-        HomeProject(name: "Кухня",     tone: "sage", step: 1, totalSteps: 5,
-                    currentBudget:  62_000, maxBudget: 180_000)
+        HomeProject(name: "Кухня", tone: "sage", step: 1, totalSteps: 5,
+                    currentBudget: 62_000, maxBudget: 180_000)
     ]
 
     public static let mockIdeas: [HomeIdea] = [
