@@ -32,6 +32,8 @@ public actor LockBoxSecretsManager {
         case yandexFolderId = "YANDEX_FOLDER_ID"
         case gigachatClientSecret = "GIGACHAT_CLIENT_SECRET"
         case appToken = "APP_TOKEN"
+        case langfusePublicKey = "LANGFUSE_PUBLIC_KEY"
+        case langfuseSecretKey = "LANGFUSE_SECRET_KEY"
     }
 
     // MARK: - State
