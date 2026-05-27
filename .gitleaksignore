@@ -1,0 +1,3 @@
+# Файлы, исключённые из проверки gitleaks.
+# Добавляйте fingerprint найденных false positive, а НЕ пути к файлам.
+# Формат: один fingerprint на строку (из вывода gitleaks detect).
