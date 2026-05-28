@@ -12,6 +12,10 @@ import { runActor } from '../../shared/apify-client.js';
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
+import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+
+// Вторичный лимит по IP (#17) — backstop против ротации userId в теле запроса.
+const ipLimiter = createRateLimiter({ max: 60 });
 
 const APP_TOKEN_HEADER = 'x-app-token';
 const MAX_QUERY_LENGTH = 1000;
@@ -101,7 +105,11 @@ export const handler = async (event, context) => {
       ? budget
       : null;
 
-    // 4. Rate limit
+    // 4. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    const ipInfo = ipLimiter(clientIp(event));
+    if (!ipInfo.allowed) {
+      return buildResponse(429, { error: 'Rate limit exceeded (per-IP).', retryAfter: 60 });
+    }
     const rateInfo = checkRateLimit(userId);
     if (!rateInfo.allowed) {
       return buildResponse(429, { error: 'Rate limit exceeded. Max 20 req/min.', retryAfter: 60 });

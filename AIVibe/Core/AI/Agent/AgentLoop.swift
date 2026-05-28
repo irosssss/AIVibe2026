@@ -379,8 +379,11 @@ public actor AgentLoop {
                 for callDict in callsArray {
                     let name = callDict["name"] as? String ?? ""
                     let args = callDict["arguments"] as? [String: Any] ?? [:]
-                    let callIdStr = callDict["id"] as? String ?? UUID().uuidString
-                    let callId = UUID(uuidString: callIdStr) ?? UUID()
+                    // Безопасность (#15, ASI02 Tool Misuse): callId всегда генерим
+                    // на сервере и игнорируем callDict["id"] — модель не должна
+                    // управлять идентификатором вызова (иначе возможна подмена
+                    // callId уже одобренного действия / коллизии при idempotency).
+                    let callId = UUID()
                     toolCalls.append(ToolCallRequest(
                         id: callId,
                         name: name,

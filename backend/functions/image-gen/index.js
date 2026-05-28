@@ -8,6 +8,10 @@
 
 import { runActor } from '../../shared/apify-client.js';
 import { getSecrets } from '../../shared/secrets.js';
+import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+
+// Вторичный лимит по IP (#17) — image-gen дорогой, держим жёстко.
+const ipLimiter = createRateLimiter({ max: 15 });
 
 const APP_TOKEN_HEADER = 'x-app-token';
 const MAX_USER_ID_LENGTH = 64;
@@ -123,7 +127,11 @@ export const handler = async (event, context) => {
       safePalette = colorPalette;
     }
 
-    // 5. Rate limit
+    // 5. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    const ipInfo = ipLimiter(clientIp(event));
+    if (!ipInfo.allowed) {
+      return buildResponse(429, { error: 'Rate limit exceeded (per-IP).', retryAfter: 60 });
+    }
     const rateInfo = checkRateLimit(userId);
     if (!rateInfo.allowed) {
       return buildResponse(429, { error: 'Rate limit exceeded. Max 5 req/min for image generation.', retryAfter: 60 });
