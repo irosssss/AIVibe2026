@@ -24,7 +24,18 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Collections", package: "swift-collections")
             ],
-            path: "AIVibe"
+            path: "AIVibe",
+            swiftSettings: [
+                // Swift 6.2 approachable concurrency — включаем по одной фиче,
+                // чтобы видеть какая создаёт какие warning'и.
+                // ⚠️ defaultIsolation(MainActor.self) НЕ включаем — ломает
+                // ReducerOf<Self> в TCA 1.25 (см. PointFree discussion #3714).
+                //
+                // InferSendableFromCaptures, GlobalActorIsolatedTypesUsability,
+                // DisableOutwardActorInference — уже включены по умолчанию в Swift 6.
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+                .enableUpcomingFeature("InferIsolatedConformances")
+            ]
         ),
         .testTarget(
             name: "AIVibeTests",
