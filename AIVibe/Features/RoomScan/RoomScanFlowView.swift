@@ -11,6 +11,7 @@ import RoomPlan
 public struct RoomScanFlowScreen: View {
     private let onClose: () -> Void
     private let onContinueWithResult: () -> Void
+    private let onContinueWithDesign: (RoomDesignPlan, RoomGeometry) -> Void
 
     @StateObject private var host = StoreHost<RoomScanFlowFeature>(
         Store(initialState: RoomScanFlowFeature.State()) { RoomScanFlowFeature() }
@@ -18,17 +19,20 @@ public struct RoomScanFlowScreen: View {
 
     public init(
         onClose: @escaping () -> Void = {},
-        onContinueWithResult: @escaping () -> Void = {}
+        onContinueWithResult: @escaping () -> Void = {},
+        onContinueWithDesign: @escaping (RoomDesignPlan, RoomGeometry) -> Void = { _, _ in }
     ) {
         self.onClose = onClose
         self.onContinueWithResult = onContinueWithResult
+        self.onContinueWithDesign = onContinueWithDesign
     }
 
     public var body: some View {
         RoomScanFlowView(
             store: host.store,
             onClose: onClose,
-            onContinueWithResult: onContinueWithResult
+            onContinueWithResult: onContinueWithResult,
+            onContinueWithDesign: onContinueWithDesign
         )
         .navigationBarBackButtonHidden(true)
     }
@@ -38,6 +42,7 @@ struct RoomScanFlowView: View {
     @Bindable var store: StoreOf<RoomScanFlowFeature>
     let onClose: () -> Void
     let onContinueWithResult: () -> Void
+    let onContinueWithDesign: (RoomDesignPlan, RoomGeometry) -> Void
 
     var body: some View {
         AIThemeReader {
@@ -47,7 +52,14 @@ struct RoomScanFlowView: View {
             case .result:         ScanResultScreenView(store: store)
             case .styleSelection: StylePickerView(store: store)
             case .generating:     DesignGeneratingView(store: store)
-            case .designComplete: DesignCompleteView(store: store, onContinue: onContinueWithResult)
+            case .designComplete:
+                DesignCompleteView(store: store) {
+                    if let plan = store.designPlan, let geo = store.geometry {
+                        onContinueWithDesign(plan, geo)
+                    } else {
+                        onContinueWithResult()
+                    }
+                }
             }
         }
     }

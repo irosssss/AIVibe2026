@@ -208,7 +208,7 @@ public actor AgentOrchestrator {
     private func buildCollisionDescription(report: CollisionReport) -> String {
         var parts: [String] = []
         if !report.collidingPairs.isEmpty {
-            let pairs = report.collidingPairs.map { "\($0.0.itemType) и \($0.1.itemType)" }
+            let pairs = report.collidingPairs.map { "\($0.first.itemType) и \($0.second.itemType)" }
             parts.append("Коллизии: \(pairs.joined(separator: "; "))")
         }
         if !report.itemsOutOfBounds.isEmpty {

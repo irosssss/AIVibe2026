@@ -160,15 +160,16 @@ struct AIAdvisorFeature {
                 )
                 guard !input.isEmpty else { return .none }
 
+                // Defense in depth: если sourceImage отсутствует (например, standalone AI tab
+                // без шага capture), молча падаем на text-only path вместо ошибки. Codex P1.
+                guard let image = state.sourceImage else {
+                    return .send(.sendTextOnlyMessage)
+                }
+
                 let userMsg = AdvisorChatMessage(text: input, provider: "", isUser: true)
                 state.chatMessages.append(userMsg)
                 state.currentInput = ""
                 state.phase = .awaitingAI
-
-                guard let image = state.sourceImage else {
-                    state.phase = .error("Нет изображения")
-                    return .none
-                }
 
                 let request = DesignRequest(
                     roomType: state.selectedRoomType,

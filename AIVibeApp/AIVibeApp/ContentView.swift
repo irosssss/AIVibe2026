@@ -15,6 +15,10 @@ struct ContentView: View {
     @State private var scanPath = NavigationPath()
     @State private var arPath   = NavigationPath()
 
+    // — Последний сгенерированный план (для передачи в AR-экран).
+    @State private var pendingDesignPlan: RoomDesignPlan?
+    @State private var pendingRoomGeometry: RoomGeometry?
+
     // — Выбранный таб + предыдущий, чтобы поймать «повторный тап» = pop to root.
     @State private var selectedTab: Tab = Self.initialTab()
     @State private var previousTab: Tab = .home
@@ -78,6 +82,11 @@ struct ContentView: View {
                     RoomScanFlowScreen(
                         onContinueWithResult: {
                             scanPath.append(AppRoute.arDesigner)
+                        },
+                        onContinueWithDesign: { plan, geometry in
+                            pendingDesignPlan = plan
+                            pendingRoomGeometry = geometry
+                            scanPath.append(AppRoute.arDesigner)
                         }
                     )
                     .navigationDestination(for: AppRoute.self) { route in
@@ -89,10 +98,21 @@ struct ContentView: View {
 
                 // — Таб 4: AR
                 NavigationStack(path: $arPath) {
-                    ARDesignerScreen()
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destination(for: route, in: $arPath)
+                    Group {
+                        if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
+                            ARDesignerScreen(
+                                designPlan: plan,
+                                roomGeometry: geo
+                            )
+                        } else {
+                            ARDesignerEmptyState {
+                                selectedTab = .scan
+                            }
                         }
+                    }
+                    .navigationDestination(for: AppRoute.self) { route in
+                        destination(for: route, in: $arPath)
+                    }
                 }
                 .tabItem { Label("AR", systemImage: "cube") }
                 .tag(Tab.ar)
@@ -139,13 +159,28 @@ struct ContentView: View {
             RoomScanFlowScreen(
                 onClose: { pop(path) },
                 onContinueWithResult: {
-                    // После скана — открываем AR-расстановку в том же стеке.
+                    path.wrappedValue.append(AppRoute.arDesigner)
+                },
+                onContinueWithDesign: { plan, geometry in
+                    pendingDesignPlan = plan
+                    pendingRoomGeometry = geometry
                     path.wrappedValue.append(AppRoute.arDesigner)
                 }
             )
 
         case .arDesigner:
-            ARDesignerScreen(onClose: { pop(path) })
+            if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
+                ARDesignerScreen(
+                    designPlan: plan,
+                    roomGeometry: geo,
+                    onClose: { pop(path) }
+                )
+            } else {
+                ARDesignerEmptyState {
+                    pop(path)
+                    selectedTab = .scan
+                }
+            }
 
         case .productDetail(let product):
             ProductDetailScreen(
@@ -157,10 +192,10 @@ struct ContentView: View {
             )
 
         case .ideaPreview:
-            ARDesignerScreen(onClose: { pop(path) })
+            ARDesignerEmptyState { pop(path) }
 
         case .project:
-            ARDesignerScreen(onClose: { pop(path) })
+            ARDesignerEmptyState { pop(path) }
         }
     }
 
