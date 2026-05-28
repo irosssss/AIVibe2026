@@ -69,6 +69,11 @@ export const handler = async (event, context) => {
   const startTime = Date.now();
 
   try {
+    // 0. CORS preflight — до проверки токена.
+    if (event.httpMethod === 'OPTIONS') {
+      return buildResponse(200, {});
+    }
+
     // 1. APP_TOKEN check
     const appToken = event.headers?.[APP_TOKEN_HEADER]
                   || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];

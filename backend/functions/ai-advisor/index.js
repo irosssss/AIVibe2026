@@ -43,6 +43,13 @@ export const handler = async (event, context) => {
     const startTime = Date.now();
 
     try {
+        // 0. CORS preflight — отвечаем 200 ДО любых проверок токена,
+        // иначе браузерный preflight (без X-App-Token) получит 403 и
+        // реальный POST не уйдёт.
+        if (event.httpMethod === 'OPTIONS') {
+            return buildResponse(200, {});
+        }
+
         // 1. APP_TOKEN check — закрывает unauthenticated abuse (#20 / #14)
         const appToken = event.headers?.[APP_TOKEN_HEADER]
                       || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
