@@ -5,6 +5,11 @@
 
 import { triplexFallback } from '../../shared/triplex-fallback.js';
 import { guardPrompt, MAX_PROMPT_LENGTH } from '../../shared/promptGuard.js';
+import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+
+// Вторичный лимит по IP (#17): userId берётся из тела и его можно ротировать,
+// IP — нет. Порог выше per-user (NAT/общие сети), это backstop против ротации.
+const ipLimiter = createRateLimiter({ max: 60 });
 
 const APP_TOKEN_HEADER = 'x-app-token';
 const MAX_USER_ID_LENGTH = 64;
@@ -126,7 +131,14 @@ export const handler = async (event, context) => {
             return buildResponse(400, { error: 'Content policy violation' });
         }
 
-        // 5. Rate limit
+        // 5. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+        const ipInfo = ipLimiter(clientIp(event));
+        if (!ipInfo.allowed) {
+            return buildResponse(429, {
+                error: 'Rate limit exceeded (per-IP).',
+                retryAfter: 60
+            });
+        }
         const rateInfo = checkRateLimit(userId);
         if (!rateInfo.allowed) {
             return buildResponse(429, {
