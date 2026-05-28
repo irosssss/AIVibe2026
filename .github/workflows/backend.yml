@@ -1,0 +1,44 @@
+name: Backend CI
+
+# Запускается только когда меняются файлы backend/** — чисто iOS-PR не тратят CI время.
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  syntax-and-tests:
+    name: Node 20 — syntax + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check (node --check)
+        # Прогоняем все .js файлы в backend, кроме node_modules и тестов.
+        # `node --check` парсит файл без выполнения — ловит синтаксические ошибки.
+        run: |
+          find . -name "*.js" \
+            -not -path "./node_modules/*" \
+            -not -path "*/node_modules/*" \
+            -print0 | xargs -0 -n1 node --check
+
+      - name: Run tests (node --test)
+        # Node 20 имеет встроенный test runner — не нужны зависимости (jest/mocha).
+        # Это согласуется с CLAUDE.md: «backend без внешних npm-зависимостей».
+        run: node --test

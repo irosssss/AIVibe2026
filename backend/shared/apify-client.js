@@ -16,12 +16,16 @@ export async function runActor(actorId, input, options = {}) {
   const timeoutSecs = options.timeoutSecs ?? 120;
   const memoryMbytes = options.memoryMbytes;
 
-  const url = `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items` +
-    `?token=${token}&timeout=${timeoutSecs}&memory=${memoryMbytes}`;
+  const params = new URLSearchParams({ timeout: String(timeoutSecs) });
+  if (memoryMbytes != null) params.set('memory', String(memoryMbytes));
+  const url = `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?${params}`;
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
     body: JSON.stringify(input),
     signal: AbortSignal.timeout((timeoutSecs + 15) * 1000),
   });
@@ -45,10 +49,13 @@ export async function startActor(actorId, input, options = {}) {
   const memoryMbytes = options.memoryMbytes ?? 512;
 
   const response = await fetch(
-    `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/runs?token=${token}&memory=${memoryMbytes}`,
+    `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/runs?memory=${memoryMbytes}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify(input),
     }
   );
@@ -63,17 +70,27 @@ export async function startActor(actorId, input, options = {}) {
  * @returns {{ status: 'RUNNING'|'SUCCEEDED'|'FAILED', items: Array }}
  */
 export async function getRunResults(runId) {
+  // Защита от path-traversal: runId от Apify имеет формат [a-zA-Z0-9]+,
+  // но мы не доверяем сторонним значениям. Жёсткая регэксп-валидация.
+  if (!/^[a-zA-Z0-9]+$/.test(runId)) {
+    throw new Error(`Invalid runId format: ${String(runId).slice(0, 40)}`);
+  }
+
   const secrets = await getSecrets();
   const token = secrets.APIFY_API_TOKEN;
+  const authHeaders = { 'Authorization': `Bearer ${token}` };
 
-  const statusRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${token}`);
+  const statusRes = await fetch(`${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}`, { headers: authHeaders });
   const statusData = await statusRes.json();
   const status = statusData.data.status;
 
   if (status !== 'SUCCEEDED') return { status, items: [] };
 
   const datasetId = statusData.data.defaultDatasetId;
-  const itemsRes = await fetch(`${APIFY_BASE}/datasets/${datasetId}/items?token=${token}`);
+  if (!/^[a-zA-Z0-9]+$/.test(datasetId)) {
+    throw new Error(`Invalid datasetId from Apify: ${String(datasetId).slice(0, 40)}`);
+  }
+  const itemsRes = await fetch(`${APIFY_BASE}/datasets/${encodeURIComponent(datasetId)}/items`, { headers: authHeaders });
   const items = await itemsRes.json();
   return { status, items };
 }
