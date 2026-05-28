@@ -10,6 +10,30 @@ const APP_TOKEN_HEADER = 'x-app-token';
 const MAX_USER_ID_LENGTH = 64;
 const MAX_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB raw
 
+/**
+ * Проверяет, что base64 действительно содержит JPEG или PNG — по magic bytes.
+ * Без внешних библиотек (требование CLAUDE.md): декодируем первые байты и
+ * сверяем сигнатуру. Защита от загрузки произвольных файлов под видом картинки.
+ * EXIF-метаданные уже срезаются на клиенте (UIImage.jpegData переэнкодит).
+ */
+function isAllowedImageBase64(base64) {
+    // Снимаем возможный data-URL-префикс (data:image/jpeg;base64,...).
+    const comma = base64.indexOf(',');
+    const raw = base64.startsWith('data:') && comma !== -1 ? base64.slice(comma + 1) : base64;
+    let head;
+    try {
+        head = Buffer.from(raw.slice(0, 16), 'base64');
+    } catch {
+        return false;
+    }
+    if (head.length < 4) return false;
+    // JPEG: FF D8 FF
+    if (head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF) return true;
+    // PNG: 89 50 4E 47
+    if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4E && head[3] === 0x47) return true;
+    return false;
+}
+
 // In-memory rate limit store: { userId: { count, resetAt } }
 const rateLimitStore = new Map();
 const RATE_LIMIT_PER_MINUTE = 20;
@@ -81,8 +105,13 @@ export const handler = async (event, context) => {
         if (userId.length > MAX_USER_ID_LENGTH || !/^[a-zA-Z0-9_.-]+$/.test(userId)) {
             return buildResponse(400, { error: 'Invalid userId format' });
         }
-        if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.length > MAX_BASE64_LENGTH) {
-            return buildResponse(413, { error: 'imageBase64 too large' });
+        if (imageBase64 && typeof imageBase64 === 'string') {
+            if (imageBase64.length > MAX_BASE64_LENGTH) {
+                return buildResponse(413, { error: 'imageBase64 too large' });
+            }
+            if (!isAllowedImageBase64(imageBase64)) {
+                return buildResponse(400, { error: 'imageBase64 must be a valid JPEG or PNG' });
+            }
         }
 
         // 4. Prompt guard — injection-паттерны и cost-amplification.
