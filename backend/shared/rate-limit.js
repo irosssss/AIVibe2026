@@ -29,14 +29,17 @@ export function createRateLimiter({ max, windowMs = 60_000 }) {
 }
 
 /**
- * Достаёт IP клиента из события Yandex Cloud Function (разные форматы шлюза).
+ * Достаёт IP клиента из события Yandex Cloud Function.
+ *
+ * Используем ТОЛЬКО доверенное платформенное поле requestContext.identity.sourceIp.
+ * X-Forwarded-For намеренно НЕ используем: Yandex сохраняет присланный клиентом
+ * XFF, поэтому первый хоп — под контролем клиента и позволял бы обойти IP-лимит
+ * ротацией заголовка (Codex P1). Если sourceIp отсутствует — общий bucket
+ * 'unknown' (over-restrictive, но не обходится).
  * @param {object} event
  * @returns {string}
  */
 export function clientIp(event) {
-  const fromCtx = event?.requestContext?.identity?.sourceIp;
-  if (typeof fromCtx === 'string' && fromCtx.length > 0) return fromCtx;
-  const xff = event?.headers?.['X-Forwarded-For'] ?? event?.headers?.['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.length > 0) return xff.split(',')[0].trim();
-  return 'unknown';
+  const ip = event?.requestContext?.identity?.sourceIp;
+  return (typeof ip === 'string' && ip.length > 0) ? ip : 'unknown';
 }

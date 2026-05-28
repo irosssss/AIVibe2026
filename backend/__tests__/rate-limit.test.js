@@ -38,9 +38,10 @@ test('clientIp reads requestContext.identity.sourceIp', () => {
   assert.equal(clientIp(event), '203.0.113.5');
 });
 
-test('clientIp falls back to X-Forwarded-For (first hop)', () => {
+test('clientIp ignores user-controlled X-Forwarded-For (Codex P1)', () => {
+  // XFF задаётся клиентом — не доверяем, иначе IP-лимит обходится ротацией заголовка.
   const event = { headers: { 'X-Forwarded-For': '198.51.100.7, 10.0.0.1' } };
-  assert.equal(clientIp(event), '198.51.100.7');
+  assert.equal(clientIp(event), 'unknown');
 });
 
 test('clientIp returns "unknown" when nothing present', () => {
