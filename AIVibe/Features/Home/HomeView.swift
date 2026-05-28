@@ -72,6 +72,10 @@ public struct HomeView: View {
                     }
                 }
             }
+            .task {
+                // Загружаем сохранённые проекты при открытии экрана (B1).
+                store.send(.onAppear)
+            }
         }
     }
 

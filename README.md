@@ -230,6 +230,9 @@ Backend — набор **Yandex Cloud Functions** на Node.js 20 (ESM). Деп�
 | 6 | RoomScan — RoomPlan 2 + AgentOrchestrator pipeline | ✅ |
 | 7 | ARDesigner — Phase 4, полная RealityKit-миграция | ✅ |
 | 8 | iOS 26 deployment target + Swift 6.2 approachable concurrency | ✅ |
+| 9 | Security hardening — auth, promptGuard, prompt-injection защита (бэкенд + iOS) | ✅ |
+| 10 | Локальное сохранение сессий — чат + проекты (Tier 2.1 / B1) | 🔄 PR #25 |
+| — | Облачная синхронизация сессий (YDB, B2) | ⏳ |
 | — | Auth (Sign in with Apple + Яндекс ID + VK ID) | ⏳ |
 | — | Portfolio (публичные ссылки на AR-проекты) | ⏳ |
 | — | AppMetrica SDK (сейчас wrapper) | ⏳ |
