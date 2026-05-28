@@ -26,7 +26,7 @@ jobs:
 
   swiftlint:
     name: SwiftLint
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: macos-15
+    runs-on: macos-26
     needs: swiftlint
     steps:
       - name: Checkout
@@ -53,13 +53,13 @@ jobs:
 
       - name: Install iOS Simulator runtime
         run: |
-          # На macos-15 runner iOS runtime может быть не установлен
-          # Проверяем и устанавливаем при необходимости
-          if ! xcrun simctl list runtimes | grep -q "iOS"; then
-            echo "Installing iOS simulator runtime..."
+          # На macos-26 runner iOS 26 runtime обычно предустановлен.
+          # На всякий случай проверяем.
+          if ! xcrun simctl list runtimes | grep -q "iOS 26"; then
+            echo "Installing iOS 26 simulator runtime..."
             xcodebuild -downloadPlatform iOS
           else
-            echo "iOS runtime already available"
+            echo "iOS 26 runtime already available"
           fi
 
       - name: Determine simulator destination
@@ -108,7 +108,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: macos-15
+    runs-on: macos-26
     needs: build
     steps:
       - name: Checkout
@@ -116,7 +116,7 @@ jobs:
 
       - name: Install iOS Simulator runtime
         run: |
-          if ! xcrun simctl list runtimes | grep -q "iOS"; then
+          if ! xcrun simctl list runtimes | grep -q "iOS 26"; then
             xcodebuild -downloadPlatform iOS
           fi
 
@@ -126,7 +126,7 @@ jobs:
           import json, sys
           data = json.load(sys.stdin)
           for runtime, devices in data['devices'].items():
-              if 'iOS' in runtime:
+              if 'iOS 26' in runtime:
                   for d in devices:
                       if 'iPhone' in d['name'] and d['isAvailable']:
                           print(d['udid'])
@@ -136,7 +136,7 @@ jobs:
           if [ -n "$SIM_ID" ]; then
             echo "DESTINATION=platform=iOS Simulator,id=$SIM_ID" >> $GITHUB_ENV
           else
-            echo "::warning::No iOS simulator available — skipping tests"
+            echo "::warning::No iOS 26 simulator available — skipping tests"
             echo "SKIP_TESTS=true" >> $GITHUB_ENV
           fi
 
