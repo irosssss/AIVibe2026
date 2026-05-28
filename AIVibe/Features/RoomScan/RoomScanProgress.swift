@@ -13,10 +13,7 @@
 
 import Foundation
 import Observation
-
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 
 @MainActor
 @Observable
@@ -77,7 +74,6 @@ public final class RoomScanProgress {
 
 // MARK: - User-facing instructions
 
-#if canImport(RoomPlan)
 extension RoomCaptureSession.Instruction {
     /// Локализованный текст для overlay подсказки.
     var localizedRu: String {
@@ -92,4 +88,3 @@ extension RoomCaptureSession.Instruction {
         }
     }
 }
-#endif

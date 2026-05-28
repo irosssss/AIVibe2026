@@ -2,17 +2,13 @@
 // Обёртка над RoomGeometryExtractor с аналитикой и логированием.
 
 import Foundation
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 import Logging
 
 // MARK: - Протокол
 
 public protocol AnalyzerAgentProtocol: Sendable {
-    #if canImport(RoomPlan)
     func extract(_ capturedRoom: CapturedRoom) async throws -> RoomGeometry
-    #endif
 }
 
 // MARK: - Реализация
@@ -30,8 +26,6 @@ public actor AnalyzerAgent: AnalyzerAgentProtocol {
         self.extractor = extractor
         self.analytics = analytics
     }
-
-    #if canImport(RoomPlan)
 
     public func extract(_ capturedRoom: CapturedRoom) async throws -> RoomGeometry {
         let start = Date()
@@ -61,6 +55,4 @@ public actor AnalyzerAgent: AnalyzerAgentProtocol {
             throw error
         }
     }
-
-    #endif // canImport(RoomPlan)
 }

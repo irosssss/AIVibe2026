@@ -2,10 +2,8 @@
 // Парсинг CapturedRoom (RoomPlan) в типизированную структуру RoomGeometry.
 
 import Foundation
-#if canImport(RoomPlan)
 import RoomPlan
 import simd
-#endif
 
 // MARK: - Типы геометрии (не зависят от RoomPlan)
 
@@ -93,14 +91,10 @@ public enum RoomGeometryError: LocalizedError, Sendable, Equatable {
 // MARK: - Протокол экстрактора
 
 public protocol RoomGeometryExtracting: Sendable {
-    #if canImport(RoomPlan)
     func extract(from capturedRoom: CapturedRoom) throws -> RoomGeometry
-    #endif
 }
 
-// MARK: - Реализация (только с RoomPlan)
-
-#if canImport(RoomPlan)
+// MARK: - Реализация
 
 public struct RoomGeometryExtractor: RoomGeometryExtracting {
 
@@ -230,5 +224,3 @@ public struct RoomGeometryExtractor: RoomGeometryExtracting {
         return result
     }
 }
-
-#endif // canImport(RoomPlan)

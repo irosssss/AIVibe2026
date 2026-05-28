@@ -79,7 +79,19 @@ struct RoomScanView: View {
     }
 
     private var scanningView: some View {
-#if canImport(RoomPlan)
+#if targetEnvironment(simulator)
+        // На симуляторе нет камеры/LiDAR — показываем заглушку.
+        ZStack {
+            Color(.systemGray6).ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(Strings.noLiDAR)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+        }
+#else
         RoomCaptureRepresentable(
             onCapturedRoom: { [store] capturedRoom in
                 // CapturedRoom is not Encodable; export via USDZ.
@@ -109,17 +121,6 @@ struct RoomScanView: View {
             .padding()
         }
         .ignoresSafeArea()
-#else
-        ZStack {
-            Color(.systemGray6).ignoresSafeArea()
-            VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                Text(Strings.noLiDAR)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-        }
 #endif
     }
 
@@ -164,7 +165,6 @@ struct RoomScanView: View {
 
 // MARK: - RoomCapture ViewRepresentable (RoomPlan)
 
-#if canImport(RoomPlan)
 import RoomPlan
 
 /// RoomCaptureSession не Sendable — обёртка для передачи в actor.
@@ -265,7 +265,6 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         }
     }
 }
-#endif
 
 // MARK: - Preview
 

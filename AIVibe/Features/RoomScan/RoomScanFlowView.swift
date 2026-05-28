@@ -4,10 +4,7 @@
 
 import ComposableArchitecture
 import SwiftUI
-
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 
 // MARK: - Flow entry
 
@@ -190,7 +187,12 @@ struct ScanActiveScreenView: View {
 
     var body: some View {
         ZStack {
-            #if canImport(RoomPlan)
+            #if targetEnvironment(simulator)
+            // На симуляторе RoomPlan не работает (нет камеры/LiDAR) —
+            // показываем декоративный фон + фейк-прогресс через таймер.
+            ScanCameraSimulatedBackground()
+                .ignoresSafeArea()
+            #else
             // На реальном устройстве — RoomPlan с real-time delegate.
             RoomCaptureRepresentableV2(
                 progress: progress,
@@ -214,9 +216,6 @@ struct ScanActiveScreenView: View {
                 }
             )
             .ignoresSafeArea()
-            #else
-            ScanCameraSimulatedBackground()
-                .ignoresSafeArea()
             #endif
 
             ScanActiveOverlay(

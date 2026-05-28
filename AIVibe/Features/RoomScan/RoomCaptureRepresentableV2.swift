@@ -4,8 +4,6 @@
 // он используется в legacy `RoomScanEntry`.
 
 import SwiftUI
-
-#if canImport(RoomPlan)
 import RoomPlan
 
 /// Не-Sendable обёртка для передачи в actor (наследие из v1).
@@ -144,4 +142,3 @@ struct RoomCaptureRepresentableV2: UIViewRepresentable {
         }
     }
 }
-#endif

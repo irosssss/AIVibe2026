@@ -2,9 +2,7 @@
 // Оркестратор пайплайна: скан → геометрия → дизайн → (retry при коллизиях).
 
 import Foundation
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 import Logging
 import ComposableArchitecture
 
@@ -61,9 +59,7 @@ public actor AgentOrchestrator {
         self.analytics = analytics
     }
 
-    // MARK: - Главный пайплайн (требует RoomPlan)
-
-    #if canImport(RoomPlan)
+    // MARK: - Главный пайплайн
 
     public func runDesignPipeline(
         room capturedRoom: CapturedRoom,
@@ -105,9 +101,7 @@ public actor AgentOrchestrator {
         return plan
     }
 
-    #endif // canImport(RoomPlan)
-
-    // MARK: - Генерация дизайна из готовой геометрии (не требует RoomPlan)
+    // MARK: - Генерация дизайна из готовой геометрии
 
     public func generateDesign(
         geometry: RoomGeometry,

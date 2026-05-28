@@ -2,9 +2,7 @@
 // Валидация качества LiDAR-скана перед запуском AI-пайплайна.
 
 import Foundation
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 import Logging
 
 // MARK: - Проблемы скана
@@ -42,9 +40,7 @@ public struct QualityReport: Sendable, Equatable {
 // MARK: - Протокол
 
 public protocol ScanAgentProtocol: Sendable {
-    #if canImport(RoomPlan)
     func check(_ capturedRoom: CapturedRoom) async -> QualityReport
-    #endif
 }
 
 // MARK: - Реализация
@@ -57,8 +53,6 @@ public actor ScanAgent: ScanAgentProtocol {
     public init(extractor: any RoomGeometryExtracting = RoomGeometryExtractor()) {
         self.extractor = extractor
     }
-
-    #if canImport(RoomPlan)
 
     public func check(_ capturedRoom: CapturedRoom) async -> QualityReport {
         var score = 1.0
@@ -126,6 +120,4 @@ public actor ScanAgent: ScanAgentProtocol {
         logger.info("Скан проверен: score=\(String(format: "%.2f", finalScore)), issues=\(issues.count), canProceed=\(report.canProceed)")
         return report
     }
-
-    #endif // canImport(RoomPlan)
 }

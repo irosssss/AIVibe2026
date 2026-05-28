@@ -1,12 +1,10 @@
 // AIVibe
 // Module: Features/RoomScan
-// TCA 1.19+ / Swift 6 / iOS 18
+// TCA 1.25+ / Swift 6.2 / iOS 26
 
 import ComposableArchitecture
 import Foundation
-#if canImport(RoomPlan)
 import RoomPlan
-#endif
 
 // MARK: - Scan Status
 
@@ -91,7 +89,6 @@ public struct RoomScanFeature: Sendable {
 public actor RoomScanSession {
     public static let shared = RoomScanSession()
 
-    #if canImport(RoomPlan)
     private weak var activeSession: RoomCaptureSession?
     private var lastCapturedRoom: CapturedRoom?
 
@@ -121,16 +118,4 @@ public actor RoomScanSession {
         }
         return try await AnalyzerAgent().extract(room)
     }
-    #else
-    public func register(_ session: Any) {}
-    public func stop() {}
-
-    public func checkQuality() async -> QualityReport {
-        QualityReport(score: 0, issues: [.partialScan])
-    }
-
-    public func extractGeometry() async throws -> RoomGeometry {
-        throw RoomGeometryError.noSurfaces
-    }
-    #endif
 }
