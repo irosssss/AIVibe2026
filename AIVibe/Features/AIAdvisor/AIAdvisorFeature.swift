@@ -186,23 +186,24 @@ struct AIAdvisorFeature {
                     promptStrength: state.promptStrength
                 )
 
-                return .merge(
-                    persistChat(state.chatMessages),
-                    .run { send in
-                        do {
-                            let advice = try await self.aiAdvisorClient.getAdvice(request)
-                            await send(.chatResponseReceived(
-                                AdvisorChatMessage(
-                                    text: advice.concept,
-                                    provider: advice.provider,
-                                    isUser: false
-                                )
-                            ))
-                        } catch {
-                            await send(.aiError(error.localizedDescription))
-                        }
+                // Сохраняем сообщение пользователя ДО запроса (в том же эффекте),
+                // чтобы оно не гонялось с записью полного транскрипта в
+                // chatResponseReceived и не затирало ответ AI. Codex P2.
+                return .run { [storageClient, aiAdvisorClient, messages = state.chatMessages] send in
+                    try? storageClient.save(messages, forKey: Self.chatHistoryKey)
+                    do {
+                        let advice = try await aiAdvisorClient.getAdvice(request)
+                        await send(.chatResponseReceived(
+                            AdvisorChatMessage(
+                                text: advice.concept,
+                                provider: advice.provider,
+                                isUser: false
+                            )
+                        ))
+                    } catch {
+                        await send(.aiError(error.localizedDescription))
                     }
-                )
+                }
 
             case .sendTextOnlyMessage:
                 // Чат без приложенного фото: пользователь просто пишет вопрос.
@@ -216,18 +217,18 @@ struct AIAdvisorFeature {
                 state.currentInput = ""
                 state.phase = .awaitingAI
                 state.activeProvider = "Demo"
-                return .merge(
-                    persistChat(state.chatMessages),
-                    .run { send in
-                        try? await Task.sleep(for: .seconds(1.5))
-                        let reply = AdvisorChatMessage(
-                            text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
-                            provider: "Demo",
-                            isUser: false
-                        )
-                        await send(.chatResponseReceived(reply))
-                    }
-                )
+                // Сохраняем сообщение пользователя ДО ответа (в том же эффекте) —
+                // последовательно, без гонки с записью полного транскрипта. Codex P2.
+                return .run { [storageClient, messages = state.chatMessages] send in
+                    try? storageClient.save(messages, forKey: Self.chatHistoryKey)
+                    try? await Task.sleep(for: .seconds(1.5))
+                    let reply = AdvisorChatMessage(
+                        text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
+                        provider: "Demo",
+                        isUser: false
+                    )
+                    await send(.chatResponseReceived(reply))
+                }
 
             case .chatResponseReceived(let msg):
                 state.chatMessages.append(msg)
