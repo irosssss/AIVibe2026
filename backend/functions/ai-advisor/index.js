@@ -1,9 +1,14 @@
 // backend/functions/ai-advisor/index.js
-// Yandex Cloud Function — AI Advisor (лёгкая точка входа без prompt guard).
+// Yandex Cloud Function — AI Advisor.
 // Использует единую реализацию triplexFallback из shared/triplex-fallback.js
 // для избежания дублирования Circuit Breaker, cache и fallback-логики.
 
 import { triplexFallback } from '../../shared/triplex-fallback.js';
+import { guardPrompt, MAX_PROMPT_LENGTH } from '../../shared/promptGuard.js';
+
+const APP_TOKEN_HEADER = 'x-app-token';
+const MAX_USER_ID_LENGTH = 64;
+const MAX_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB raw
 
 // In-memory rate limit store: { userId: { count, resetAt } }
 const rateLimitStore = new Map();
@@ -38,14 +43,54 @@ export const handler = async (event, context) => {
     const startTime = Date.now();
 
     try {
-        const body = JSON.parse(event.body || '{}');
-        const { prompt, userId, imageBase64 } = body;
-
-        if (!prompt || !userId) {
-            return buildResponse(400, { error: 'Missing required fields: prompt, userId' });
+        // 1. APP_TOKEN check — закрывает unauthenticated abuse (#20 / #14)
+        const appToken = event.headers?.[APP_TOKEN_HEADER]
+                      || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+        const expectedToken = process.env.APP_TOKEN;
+        if (!expectedToken || appToken !== expectedToken) {
+            return buildResponse(403, { error: 'Forbidden: invalid App Token' });
         }
 
-        // Rate limit
+        // 2. Parse + базовая валидация типов
+        let body;
+        try {
+            body = JSON.parse(event.body || '{}');
+        } catch {
+            return buildResponse(400, { error: 'Invalid JSON body' });
+        }
+        const { prompt, userId, imageBase64 } = body;
+
+        if (!prompt || typeof prompt !== 'string') {
+            return buildResponse(400, { error: 'Missing required field: prompt' });
+        }
+        if (!userId || typeof userId !== 'string') {
+            return buildResponse(400, { error: 'Missing required field: userId' });
+        }
+
+        // 3. Input limits + regex (M2 imageBase64 / M3 userId)
+        if (prompt.length > MAX_PROMPT_LENGTH) {
+            return buildResponse(413, { error: 'Prompt too long' });
+        }
+        if (userId.length > MAX_USER_ID_LENGTH || !/^[a-zA-Z0-9_.-]+$/.test(userId)) {
+            return buildResponse(400, { error: 'Invalid userId format' });
+        }
+        if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.length > MAX_BASE64_LENGTH) {
+            return buildResponse(413, { error: 'imageBase64 too large' });
+        }
+
+        // 4. Prompt guard — injection-паттерны и cost-amplification.
+        // Наружу отдаём обобщённое сообщение; технический reason — только в логах.
+        const guardVerdict = guardPrompt(prompt);
+        if (!guardVerdict.allowed) {
+            console.warn('[warn] prompt rejected by guard', JSON.stringify({
+                _l: 'warn',
+                userId: userId.slice(0, 16),
+                reason: guardVerdict.reason,
+            }));
+            return buildResponse(400, { error: 'Content policy violation' });
+        }
+
+        // 5. Rate limit
         const rateInfo = checkRateLimit(userId);
         if (!rateInfo.allowed) {
             return buildResponse(429, {
@@ -82,10 +127,18 @@ export const handler = async (event, context) => {
         });
 
     } catch (err) {
-        console.error('aiAdvisor fatal error:', err.message);
+        // L2 fix: не отдаём err.message наружу — log internally, generic response
+        const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : String(Date.now());
+        console.error('aiAdvisor fatal error:', JSON.stringify({
+            requestId,
+            message: err.message,
+            stack: err.stack?.slice(0, 500)
+        }));
         return buildResponse(500, {
-            error: err.message,
-            provider: 'none',
+            error: 'internal_error',
+            requestId,
             latency_ms: Date.now() - startTime
         });
     }
@@ -98,7 +151,7 @@ function buildResponse(statusCode, body) {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, X-Firebase-AppCheck'
+            'Access-Control-Allow-Headers': 'Content-Type, X-App-Token'
         },
         body: JSON.stringify(body)
     };
