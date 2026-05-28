@@ -333,7 +333,11 @@ public struct ContextBuilder: Sendable {
         let artifact = await session.getArtifact(type: "furniture_search")
         guard let artifact = artifact else { return nil }
 
-        let truncated = String(artifact.data.prefix(4000))  // Ограничиваем marketplace данные
+        // Данные маркетплейсов формируются из названий/описаний товаров, которые
+        // может подделать продавец. Срезаем невидимые управляющие символы и
+        // Unicode tag block (ASCII smuggling) до попадания в контекст LLM.
+        let sanitized = Self.sanitizeUntrustedData(artifact.data)
+        let truncated = String(sanitized.prefix(4000))  // Ограничиваем marketplace данные
 
         return ContextSection(
             level: .data,
@@ -348,6 +352,25 @@ public struct ContextBuilder: Sendable {
             ⚠️ Это данные маркетплейсов — проверяй актуальность цен и наличие перед рекомендацией.
             """
         )
+    }
+
+    /// Удаляет невидимые символы, которыми можно спрятать prompt injection в
+    /// данных из недоверенных источников: Unicode tag block (ASCII smuggling),
+    /// zero-width, bidi-override и управляющие символы C0/C1 (кроме \t \n \r).
+    static func sanitizeUntrustedData(_ raw: String) -> String {
+        var out = String.UnicodeScalarView()
+        out.reserveCapacity(raw.unicodeScalars.count)
+        for scalar in raw.unicodeScalars {
+            let v = scalar.value
+            switch v {
+            case 0xE0000...0xE007F:           continue  // Unicode tag block
+            case 0x200B...0x200D, 0xFEFF:     continue  // zero-width + BOM
+            case 0x202A...0x202E, 0x2066...0x2069: continue  // bidi overrides
+            case 0x00...0x08, 0x0B, 0x0C, 0x0E...0x1F, 0x7F...0x9F: continue  // control
+            default:                          out.append(scalar)
+            }
+        }
+        return String(out)
     }
 
     /// 9. Style guides and reference images (DATA).

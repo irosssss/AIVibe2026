@@ -6,6 +6,7 @@ import { runActor } from '../../shared/apify-client.js';
 import { getEmbedding } from '../../shared/yandexgpt.js';
 import { ydbClient } from '../../shared/ydb-client.js';
 import { getSecrets } from '../../shared/secrets.js';
+import { guardPrompt } from '../../shared/promptGuard.js';
 
 const DESIGN_SOURCES = [
   'https://www.houzz.ru/magazine',
@@ -13,9 +14,33 @@ const DESIGN_SOURCES = [
   'https://www.admagazine.ru/interior',
 ];
 
+// Whitelist хостов: краулер ходит по ссылкам и может уйти на чужой домен.
+// Индексируем только страницы с доверенных дизайн-источников.
+const ALLOWED_HOSTS = new Set(DESIGN_SOURCES.map(u => new URL(u).hostname));
+
+function isAllowedHost(pageUrl) {
+  try {
+    return ALLOWED_HOSTS.has(new URL(pageUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// Срезает невидимые символы, которыми можно спрятать инструкции в краулёном
+// контенте: Unicode tag block (ASCII smuggling), zero-width, bidi, control C0/C1.
+function sanitizeForIndex(text) {
+  return text
+    .replace(/[\u{E0000}-\u{E007F}]/gu, '')                       // Unicode tag block
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')                       // zero-width + BOM
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, '')               // bidi overrides
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, ''); // control
+}
+
 export const handler = async (event, context) => {
   await getSecrets();
   let totalChunks = 0;
+  let skippedChunks = 0;
 
   for (const url of DESIGN_SOURCES) {
     try {
@@ -32,28 +57,44 @@ export const handler = async (event, context) => {
 
       for (const page of pages) {
         if (!page.markdown || page.markdown.length < 100) continue;
-        const chunks = splitChunks(page.markdown, 2000);
+
+        // Whitelist: не индексируем страницы, на которые краулер ушёл за домен.
+        const pageUrl = page.url || url;
+        if (!isAllowedHost(pageUrl)) {
+          console.warn(`[rag] skip off-domain page: ${String(pageUrl).slice(0, 120)}`);
+          continue;
+        }
+
+        const chunks = splitChunks(sanitizeForIndex(page.markdown), 2000);
+
+        // Отбрасываем чанки с известными injection-паттернами (RAG poisoning):
+        // их нельзя класть в индекс — позже они попадут в контекст LLM.
+        const cleanChunks = chunks.filter(chunk => {
+          if (guardPrompt(chunk).allowed) return true;
+          skippedChunks++;
+          return false;
+        });
 
         // Параллельные эмбеддинги — убираем N+1 serial bottleneck
         // Лимит 10 параллельных запросов к embedding API
         const embeddings = await parallelLimit(
-          chunks,
+          cleanChunks,
           10,
           chunk => getEmbedding(chunk).catch(err => {
-            console.error(`Embedding failed for chunk of ${url}:`, err.message);
+            console.error(`Embedding failed for chunk of ${pageUrl}:`, err.message);
             return null;
           })
         );
 
-        for (let i = 0; i < chunks.length; i++) {
+        for (let i = 0; i < cleanChunks.length; i++) {
           const embedding = embeddings[i];
           if (!embedding) continue; // skip failed embeddings
           await ydbClient.upsert('rag_chunks', {
-            id: Buffer.from(url + chunks[i].slice(0, 40)).toString('base64').slice(0, 32),
-            source_url: url,
-            content: chunks[i],
+            id: Buffer.from(pageUrl + cleanChunks[i].slice(0, 40)).toString('base64').slice(0, 32),
+            source_url: pageUrl,
+            content: cleanChunks[i],
             embedding: JSON.stringify(embedding),
-            category: detectCategory(chunks[i]),
+            category: detectCategory(cleanChunks[i]),
             created_at: new Date().toISOString(),
           });
           totalChunks++;
@@ -64,7 +105,7 @@ export const handler = async (event, context) => {
     }
   }
 
-  return { statusCode: 200, body: JSON.stringify({ indexed: totalChunks }) };
+  return { statusCode: 200, body: JSON.stringify({ indexed: totalChunks, skipped: skippedChunks }) };
 };
 
 function splitChunks(text, maxChars) {
