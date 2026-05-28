@@ -150,7 +150,7 @@ public actor ToolRegistry {
         }
 
         // 3. Permission check
-        let decision = await permissionEngine.evaluate(
+        let decision = permissionEngine.evaluate(
             toolName: call.name,
             riskClass: tool.riskClass,
             arguments: validated
@@ -256,7 +256,7 @@ public actor ToolRegistry {
 
     /// Обновляет контекст сессии в PermissionEngine.
     public func updateSessionContext(_ context: SessionContext) async {
-        await permissionEngine.updateContext(context)
+        permissionEngine.updateContext(context)
     }
 }
 
