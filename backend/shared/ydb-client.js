@@ -12,5 +12,3 @@ export const ydbClient = {
         return { ok: true };
     }
 };
-
-export { ydbClient };
