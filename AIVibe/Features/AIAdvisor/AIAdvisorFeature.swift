@@ -72,12 +72,19 @@ struct AIAdvisorFeature {
         case sendTextOnlyMessage           // chat без вложенного фото
         case chatResponseReceived(AdvisorChatMessage)
 
+        case onAppear                              // загрузить сохранённый чат
+        case chatHistoryLoaded([AdvisorChatMessage])
+
         case resetToIdle
     }
 
     // MARK: - Dependencies
 
     @Dependency(\.aiAdvisorClient) var aiAdvisorClient
+    @Dependency(\.storageClient) var storageClient
+
+    /// Ключ персистентного хранения истории чата (локально, B1).
+    static let chatHistoryKey = "advisor_chat_history_v1"
 
     // MARK: - Reducer
 
@@ -147,7 +154,7 @@ struct AIAdvisorFeature {
                     isUser: false
                 )
                 state.chatMessages.append(msg)
-                return .none
+                return persistChat(state.chatMessages)
 
             case .aiError(let message):
                 state.phase = .error(message)
@@ -179,20 +186,23 @@ struct AIAdvisorFeature {
                     promptStrength: state.promptStrength
                 )
 
-                return .run { send in
-                    do {
-                        let advice = try await self.aiAdvisorClient.getAdvice(request)
-                        await send(.chatResponseReceived(
-                            AdvisorChatMessage(
-                                text: advice.concept,
-                                provider: advice.provider,
-                                isUser: false
-                            )
-                        ))
-                    } catch {
-                        await send(.aiError(error.localizedDescription))
+                return .merge(
+                    persistChat(state.chatMessages),
+                    .run { send in
+                        do {
+                            let advice = try await self.aiAdvisorClient.getAdvice(request)
+                            await send(.chatResponseReceived(
+                                AdvisorChatMessage(
+                                    text: advice.concept,
+                                    provider: advice.provider,
+                                    isUser: false
+                                )
+                            ))
+                        } catch {
+                            await send(.aiError(error.localizedDescription))
+                        }
                     }
-                }
+                )
 
             case .sendTextOnlyMessage:
                 // Чат без приложенного фото: пользователь просто пишет вопрос.
@@ -206,20 +216,38 @@ struct AIAdvisorFeature {
                 state.currentInput = ""
                 state.phase = .awaitingAI
                 state.activeProvider = "Demo"
-                return .run { send in
-                    try? await Task.sleep(for: .seconds(1.5))
-                    let reply = AdvisorChatMessage(
-                        text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
-                        provider: "Demo",
-                        isUser: false
-                    )
-                    await send(.chatResponseReceived(reply))
-                }
+                return .merge(
+                    persistChat(state.chatMessages),
+                    .run { send in
+                        try? await Task.sleep(for: .seconds(1.5))
+                        let reply = AdvisorChatMessage(
+                            text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
+                            provider: "Demo",
+                            isUser: false
+                        )
+                        await send(.chatResponseReceived(reply))
+                    }
+                )
 
             case .chatResponseReceived(let msg):
                 state.chatMessages.append(msg)
                 state.phase = .result
                 state.activeProvider = nil
+                return persistChat(state.chatMessages)
+
+            case .onAppear:
+                // Подгружаем сохранённую историю чата при первом показе экрана.
+                return .run { [storageClient] send in
+                    if let saved: [AdvisorChatMessage] = try? storageClient.load(forKey: Self.chatHistoryKey) {
+                        await send(.chatHistoryLoaded(saved))
+                    }
+                }
+
+            case .chatHistoryLoaded(let messages):
+                // Не затираем уже накопленные в этой сессии сообщения.
+                if state.chatMessages.isEmpty {
+                    state.chatMessages = messages
+                }
                 return .none
 
             case .binding:
@@ -227,20 +255,39 @@ struct AIAdvisorFeature {
 
             case .resetToIdle:
                 state = State()
-                return .none
+                return .run { [storageClient] _ in
+                    try? storageClient.remove(forKey: Self.chatHistoryKey)
+                }
             }
+        }
+    }
+
+    /// Сохраняет историю чата в локальное хранилище (best-effort, ошибки не фатальны).
+    private func persistChat(_ messages: [AdvisorChatMessage]) -> Effect<Action> {
+        .run { [storageClient] _ in
+            try? storageClient.save(messages, forKey: Self.chatHistoryKey)
         }
     }
 }
 
 // MARK: - AdvisorChatMessage
 
-struct AdvisorChatMessage: Identifiable, Equatable, Sendable {
-    let id = UUID()
+struct AdvisorChatMessage: Identifiable, Equatable, Sendable, Codable {
+    let id: UUID
     let text: String
     let provider: String
     let isUser: Bool
-    let timestamp: Date = Date()
+    let timestamp: Date
+
+    // Дефолты держим в init, а не inline: при inline `let id = UUID()`
+    // синтезированный Codable не декодирует id (генерит новый) — ломает round-trip.
+    init(id: UUID = UUID(), text: String, provider: String, isUser: Bool, timestamp: Date = Date()) {
+        self.id = id
+        self.text = text
+        self.provider = provider
+        self.isUser = isUser
+        self.timestamp = timestamp
+    }
 }
 
 // MARK: - Dependency Client

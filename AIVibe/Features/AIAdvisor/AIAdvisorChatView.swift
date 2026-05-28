@@ -70,6 +70,10 @@ struct AIAdvisorChatView: View {
                     budget: budget
                 )
             }
+            .task {
+                // Загружаем сохранённую историю чата при открытии экрана (B1).
+                store.send(.onAppear)
+            }
             .onChange(of: store.chatMessages.count) { _, count in
                 startStreamingIfNeeded(count: count)
             }

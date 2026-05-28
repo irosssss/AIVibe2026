@@ -8,7 +8,8 @@
 import Foundation
 
 /// Протокол хранилища. Покрыт моками для тестирования.
-public protocol StorageClientProtocol {
+/// Sendable — нужно для использования как TCA-зависимости (`any StorageClientProtocol`).
+public protocol StorageClientProtocol: Sendable {
     /// Сохраняет объект по ключу.
     func save<T: Codable>(_ value: T, forKey key: String) throws
 

@@ -7,7 +7,7 @@ import Foundation
 
 // MARK: - Domain DTO для UI
 
-public struct HomeProject: Identifiable, Equatable, Hashable, Sendable {
+public struct HomeProject: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let id: UUID
     public let name: String
     public let tone: String          // строка под AIPhotoTone.rawValue
@@ -40,7 +40,7 @@ public struct HomeProject: Identifiable, Equatable, Hashable, Sendable {
     }
 }
 
-public struct HomeIdea: Identifiable, Equatable, Hashable, Sendable {
+public struct HomeIdea: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let id: UUID
     public let tone: String
     public let title: String         // "Скандинавский · светлая гостиная"
@@ -83,15 +83,38 @@ public struct HomeFeature: Sendable {
         case searchTapped
         case avatarTapped
         case allProjectsTapped
+
+        case onAppear                          // загрузить сохранённые проекты
+        case projectsLoaded([HomeProject])
     }
+
+    @Dependency(\.storageClient) var storageClient
+
+    /// Ключ персистентного хранения проектов (локально, B1).
+    static let projectsKey = "home_projects_v1"
 
     public init() {}
 
     public var body: some ReducerOf<Self> {
-        Reduce { _, action in
+        Reduce { state, action in
             // На этом этапе reducer — это рассылка событий вверх.
             // Навигация будет подключена на уровне App-shell.
             switch action {
+            case .onAppear:
+                return .run { [storageClient, current = state.projects] send in
+                    if let saved: [HomeProject] = try? storageClient.load(forKey: Self.projectsKey),
+                       !saved.isEmpty {
+                        await send(.projectsLoaded(saved))
+                    } else {
+                        // Первый запуск — сохраняем стартовый набор как seed.
+                        try? storageClient.save(current, forKey: Self.projectsKey)
+                    }
+                }
+
+            case .projectsLoaded(let projects):
+                state.projects = projects
+                return .none
+
             case .startScanTapped,
                  .projectTapped,
                  .ideaTryOnTapped,
