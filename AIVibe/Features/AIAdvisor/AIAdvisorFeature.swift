@@ -69,6 +69,7 @@ struct AIAdvisorFeature {
         case aiError(String)
 
         case sendChatMessage
+        case sendTextOnlyMessage           // chat без вложенного фото
         case chatResponseReceived(AdvisorChatMessage)
 
         case resetToIdle
@@ -159,15 +160,16 @@ struct AIAdvisorFeature {
                 )
                 guard !input.isEmpty else { return .none }
 
+                // Defense in depth: если sourceImage отсутствует (например, standalone AI tab
+                // без шага capture), молча падаем на text-only path вместо ошибки. Codex P1.
+                guard let image = state.sourceImage else {
+                    return .send(.sendTextOnlyMessage)
+                }
+
                 let userMsg = AdvisorChatMessage(text: input, provider: "", isUser: true)
                 state.chatMessages.append(userMsg)
                 state.currentInput = ""
                 state.phase = .awaitingAI
-
-                guard let image = state.sourceImage else {
-                    state.phase = .error("Нет изображения")
-                    return .none
-                }
 
                 let request = DesignRequest(
                     roomType: state.selectedRoomType,
@@ -192,9 +194,32 @@ struct AIAdvisorFeature {
                     }
                 }
 
+            case .sendTextOnlyMessage:
+                // Чат без приложенного фото: пользователь просто пишет вопрос.
+                // На MVP-демо отвечаем мок-сообщением через дилей, чтобы
+                // сработали thinking-индикаторы. После подключения backend
+                // здесь будет вызов text-only endpoint AgentLoop.
+                let input = state.currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !input.isEmpty else { return .none }
+                let userMsg = AdvisorChatMessage(text: input, provider: "", isUser: true)
+                state.chatMessages.append(userMsg)
+                state.currentInput = ""
+                state.phase = .awaitingAI
+                state.activeProvider = "Demo"
+                return .run { send in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    let reply = AdvisorChatMessage(
+                        text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
+                        provider: "Demo",
+                        isUser: false
+                    )
+                    await send(.chatResponseReceived(reply))
+                }
+
             case .chatResponseReceived(let msg):
                 state.chatMessages.append(msg)
                 state.phase = .result
+                state.activeProvider = nil
                 return .none
 
             case .binding:

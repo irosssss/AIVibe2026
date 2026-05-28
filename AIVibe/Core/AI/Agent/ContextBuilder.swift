@@ -113,7 +113,6 @@ public struct ContextBuilder: Sendable {
         }
 
         let totalChars = sections.reduce(0) { $0 + $1.content.count }
-        let contextSize = totalChars
 
         logger.info("📋 Контекст собран: \(sections.count) секций, \(totalChars) символов (\(Int(Double(totalChars)/Double(maxContextSize)*100))% заполнения)")
 
@@ -401,7 +400,7 @@ public struct ContextBuilder: Sendable {
 
         let text = lastUserMessage.data.asText ?? "(сообщение)"
         let currentStep = await session.currentStep
-        let maxSteps = await session.maxSteps
+        let maxSteps = session.maxSteps
         let pendingTodos = await session.pendingTodos
 
         var content = "## Текущий запрос пользователя\n\n\(text)\n"

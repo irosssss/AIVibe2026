@@ -224,13 +224,10 @@ public struct AnalyzeRoomScanTool: AgentTool {
 
     #if canImport(RealityKit) && !os(visionOS)
     private func parseUSDZRealityKit(usdzUri: String, roomId: String) async throws -> RoomAnalysis {
-        // URL из строки
-        guard let url = URL(string: usdzUri) ?? URL(fileURLWithPath: usdzUri) as URL? else {
-            throw ToolError.executionFailed(
-                tool: name,
-                error: "Невозможно создать URL из '\(usdzUri)'"
-            )
-        }
+        // URL для будущей реализации Entity.load(contentsOf:).
+        // URL(fileURLWithPath:) всегда возвращает валидный URL, поэтому
+        // guard здесь был излишним — оставлено для совместимости intent'а.
+        _ = URL(string: usdzUri) ?? URL(fileURLWithPath: usdzUri)
 
         // Загрузка USDZ через RealityKit (ожидает Mac с Xcode 16)
         // В реальной имплементации:

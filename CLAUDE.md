@@ -21,13 +21,14 @@ Ozon и Wildberries, AI на YandexGPT 5 + GigaChat-Max + CoreML fallback (Tripl
 
 ## Технологический стек
 
-- **iOS**: Swift 6 (strict concurrency), iOS 18+, SwiftUI, TCA (Composable Architecture 1.16+)
+- **iOS**: Swift 6.2 (approachable concurrency), iOS 26+, SwiftUI, TCA (Composable Architecture 1.25+)
 - **SPM**: swift-composable-architecture, Kingfisher, swift-log, swift-collections
+- **Xcode**: 26.2+ (требование App Store с 2026-04-28)
 - **Backend**: Node.js 20 (ESM), Yandex Cloud Functions, YDB
 - **AI рантайм**: YandexGPT 5 (основной) → GigaChat-Max (fallback) → CoreML (offline)
 - **Маркетплейсы**: Ozon API v2, Wildberries API, Apify
 - **Аналитика**: AppMetrica
-- **CI**: GitHub Actions (macos-14), SwiftLint --strict
+- **CI**: GitHub Actions (macos-26), SwiftLint --strict
 - **Деплой**: Fastlane (iOS), `yc serverless function` (backend)
 
 ## Структура проекта
@@ -172,13 +173,13 @@ Core/AI/
 
 ```bash
 # iOS тесты (полный suite)
-xcodebuild test -scheme AIVibe -destination "platform=iOS Simulator,name=iPhone 15,OS=18.0" -quiet
+xcodebuild test -scheme AIVibe -destination "platform=iOS Simulator,name=iPhone 17,OS=26.3.1" -quiet
 
 # iOS lint (строгий, как в CI)
 swiftlint --strict
 
 # iOS build (Debug)
-xcodebuild build -scheme AIVibe -destination "platform=iOS Simulator,name=iPhone 15,OS=18.0" -configuration Debug -quiet
+xcodebuild build -scheme AIVibe -destination "platform=iOS Simulator,name=iPhone 17,OS=26.3.1" -configuration Debug -quiet
 
 # Backend тесты
 cd backend && node --test

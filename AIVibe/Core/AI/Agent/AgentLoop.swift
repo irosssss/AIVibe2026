@@ -194,7 +194,7 @@ public actor AgentLoop {
         session: AgentSession
     ) async -> AgentLoopResult {
 
-        let maxSteps = await session.maxSteps
+        let maxSteps = session.maxSteps
 
         logger.info("🚀 Агент запущен: \"\(request.message.prefix(80))...\" [\(request.inputType.rawValue)]")
 
@@ -278,7 +278,7 @@ public actor AgentLoop {
 
                 // Проверяем на approval required
                 if result.status == .approvalRequired {
-                    let actionText = result.data as? String ?? "неизвестное действие"
+                    let actionText = result.data.isEmpty ? "неизвестное действие" : result.data
                     let riskClass = result.toolName
                     logger.info("🔐 Требуется одобрение: \(actionText)")
                     return .approvalRequired(
@@ -290,7 +290,8 @@ public actor AgentLoop {
 
                 // Проверяем на deny
                 if result.status == .denied {
-                    logger.warning("🚫 Инструмент \(call.name) отклонён: \(result.data ?? "нет причины")")
+                    let reason = result.data.isEmpty ? "нет причины" : result.data
+                    logger.warning("🚫 Инструмент \(call.name) отклонён: \(reason)")
                 }
             }
             }
@@ -471,7 +472,7 @@ public actor AgentLoop {
             if let cp = currentCheckpoint {
                 let request = UserRequest(
                     message: "Выполни чекпоинт: «\(cp)». Общая цель: \(objective)",
-                    sessionId: await session.id
+                    sessionId: session.id
                 )
                 let result = await run(request: request, session: session)
 
