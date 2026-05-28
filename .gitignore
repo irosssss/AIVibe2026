@@ -68,3 +68,8 @@ Secrets.plist
 .claude/settings.local.json
 .claude/cache/
 .claude/logs/
+.claude/skills/
+
+# Codegraph (dev-инструмент навигации — локально, без коммита)
+.codegraph/
+.mcp.json
