@@ -167,20 +167,26 @@ struct ContentView: View {
                     path.wrappedValue.append(AppRoute.arDesigner)
                 }
             )
+            // Полноэкранный поток — прячем таб-бар, чтобы не было двойной панели.
+            .toolbar(.hidden, for: .tabBar)
 
         case .arDesigner:
-            if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
-                ARDesignerScreen(
-                    designPlan: plan,
-                    roomGeometry: geo,
-                    onClose: { pop(path) }
-                )
-            } else {
-                ARDesignerEmptyState {
-                    pop(path)
-                    selectedTab = .scan
+            Group {
+                if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
+                    ARDesignerScreen(
+                        designPlan: plan,
+                        roomGeometry: geo,
+                        onClose: { pop(path) }
+                    )
+                } else {
+                    ARDesignerEmptyState {
+                        pop(path)
+                        selectedTab = .scan
+                    }
                 }
             }
+            // AR — иммерсивный экран, таб-бар скрываем.
+            .toolbar(.hidden, for: .tabBar)
 
         case .productDetail(let product):
             ProductDetailScreen(
@@ -190,6 +196,8 @@ struct ContentView: View {
                     path.wrappedValue.append(AppRoute.arDesigner)
                 }
             )
+            // Деталь товара — отдельный экран со sticky-CTA, таб-бар скрываем.
+            .toolbar(.hidden, for: .tabBar)
 
         case .ideaPreview:
             ARDesignerEmptyState { pop(path) }

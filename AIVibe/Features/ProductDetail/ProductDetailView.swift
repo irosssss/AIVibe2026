@@ -132,28 +132,27 @@ public struct ProductDetailView: View {
             )
             .frame(height: 384)
 
-            VStack {
-                HStack {
-                    Chip(background: store.product.market.brandColor, foreground: .white,
-                         horizontalPadding: 10, verticalPadding: 5) {
-                        Text(store.product.market.label)
-                    }
-                    Spacer()
+            // Точки-страницы — по центру снизу.
+            HStack(spacing: 6) {
+                ForEach(0..<5, id: \.self) { i in
+                    Capsule()
+                        .fill(i == store.currentPage
+                              ? Color.white.opacity(0.95)
+                              : Color.white.opacity(0.45))
+                        .frame(width: i == store.currentPage ? 18 : 6, height: 6)
                 }
-                Spacer()
-                HStack(spacing: 6) {
-                    ForEach(0..<5, id: \.self) { i in
-                        Capsule()
-                            .fill(i == store.currentPage
-                                  ? Color.white.opacity(0.95)
-                                  : Color.white.opacity(0.45))
-                            .frame(width: i == store.currentPage ? 18 : 6, height: 6)
-                    }
-                }
-                .padding(.bottom, 16)
             }
-            .padding(.top, 64)
-            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        // Бэйдж маркетплейса — нижний левый угол фото. Раньше он стоял в
+        // верхнем левом углу и перекрывался плавающей кнопкой «Назад» (#1a).
+        .overlay(alignment: .bottomLeading) {
+            Chip(background: store.product.market.brandColor, foreground: .white,
+                 horizontalPadding: 10, verticalPadding: 5) {
+                Text(store.product.market.label)
+            }
+            .padding(.leading, 16)
+            .padding(.bottom, 16)
         }
     }
 
