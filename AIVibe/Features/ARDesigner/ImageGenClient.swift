@@ -34,7 +34,11 @@ private struct ImageGenResponse: Codable {
 extension ImageGenClient: DependencyKey {
     static let liveValue = ImageGenClient(
         generate: { style, roomType, palette in
-            guard let url = URL(string: "https://functions.yandexcloud.net/YOUR_IMAGEGEN_FUNCTION_ID") else {
+            // L5 (#22): URL функции берём из Info.plist (ключ AIVibeImageGenURL),
+            // не хардкодим плейсхолдер YOUR_..._ID в бандл (Apple отклоняет такие билды).
+            // Если ключ не сконфигурирован — не ходим в сеть, бросаем ошибку.
+            guard let urlString = Bundle.main.object(forInfoDictionaryKey: "AIVibeImageGenURL") as? String,
+                  let url = URL(string: urlString) else {
                 throw URLError(.badURL)
             }
 
@@ -42,7 +46,9 @@ extension ImageGenClient: DependencyKey {
                 "style": style.rawValue,
                 "roomType": roomType.rawValue,
                 "colorPalette": palette.joined(separator: ", "),
-                "userId": "current_user_id"
+                // L4 (#22): реальный анонимный per-install id вместо 'current_user_id',
+                // иначе все юзеры делят один rate-limit-бакет (#17).
+                "userId": AnonymousUserID.current
             ]
 
             var request = URLRequest(url: url)
@@ -69,7 +75,8 @@ extension ImageGenClient: DependencyKey {
 
     static let testValue = ImageGenClient(
         generate: { style, roomType, _ in
-            guard let placeholderURL = URL(string: "https://placeholder.com") else { return [] }
+            // L5 (#22): example.com — RFC 2606 reserved, не реальный сторонний домен.
+            guard let placeholderURL = URL(string: "https://example.com") else { return [] }
             return [GeneratedImage(
                 id: UUID(),
                 url: placeholderURL,
