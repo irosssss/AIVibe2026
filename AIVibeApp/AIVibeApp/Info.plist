@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<!-- URL Cloud Function генерации изображений (L5/#22).
+	     Пусто = backend ещё не развёрнут → image-gen отключён (graceful fail),
+	     плейсхолдер-URL в бандл не попадает. Заполняется при деплое
+	     (значение/xcconfig/CI-секрет). -->
+	<key>AIVibeImageGenURL</key>
+	<string></string>
+</dict>
 </plist>
