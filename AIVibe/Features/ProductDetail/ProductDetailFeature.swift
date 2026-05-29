@@ -21,7 +21,7 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
     public let fitVerdict: String      // "Помещается в вашу гостиную"
     public let fitDetail: String       // "Займёт 58% свободного места у окна"
     public let aiCommentary: String
-    public let aiProvider: String      // "OpenAI · design_advisor"
+    public let aiProvider: String      // "YandexGPT · design_advisor"
     public let description: String
     public let photoTone: AIPhotoTone
 
@@ -77,7 +77,7 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         fitVerdict: "Помещается в вашу гостиную",
         fitDetail: "Займёт 58% свободного места у окна",
         aiCommentary: "Этот диван подходит к скандинавскому стилю вашей гостиной. Светлая льняная обивка визуально расширит пространство. Подушки можно стирать.",
-        aiProvider: "OpenAI · design_advisor",
+        aiProvider: "YandexGPT · design_advisor",
         description: "Угловой диван-кровать с механизмом «дельфин». Обивка — лён 80%, хлопок 20%, плотность 230 г/м². Каркас из массива берёзы, наполнение — пружинный блок Bonnel плюс холлофайбер.",
         photoTone: .sand
     )
