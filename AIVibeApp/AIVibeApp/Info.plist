@@ -8,5 +8,13 @@
 	     (значение/xcconfig/CI-секрет). -->
 	<key>AIVibeImageGenURL</key>
 	<string></string>
+	<!-- URL Cloud Function ai-advisor (L5/#22). Пусто = backend не развёрнут →
+	     запрос не уходит (graceful fail). Заполняется при деплое. -->
+	<key>AIVibeAIAdvisorURL</key>
+	<string></string>
+	<!-- App Token для X-App-Token (#14/#20). Пусто = заголовок не отправляется.
+	     В проде инжектится из CI-секрета / xcconfig, НЕ хранится в репозитории. -->
+	<key>AIVibeAppToken</key>
+	<string></string>
 </dict>
 </plist>

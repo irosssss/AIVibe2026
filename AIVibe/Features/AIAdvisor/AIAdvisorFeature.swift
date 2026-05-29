@@ -316,16 +316,31 @@ extension AIAdvisorClient: DependencyKey {
             let networkClient = NetworkClient()
             let prompt = request.buildYandexGPTPrompt()
 
-            guard let url = URL(string: "https://your-function-url/ai-advisor") else {
-                throw AIError.invalidResponse(provider: "backend", details: "Некорректный URL")
+            // L5 (#22): URL функции берём из Info.plist (ключ AIVibeAIAdvisorURL),
+            // не хардкодим плейсхолдер your-function-url в бандл (Apple отклоняет такие билды).
+            // Если ключ не сконфигурирован — не ходим в сеть, бросаем ошибку.
+            guard let urlString = Bundle.main.object(forInfoDictionaryKey: "AIVibeAIAdvisorURL") as? String,
+                  let url = URL(string: urlString) else {
+                throw AIError.invalidResponse(provider: "backend", details: "URL ai-advisor не сконфигурирован")
             }
 
             let body = AdvisorRequestBody(
                 prompt: prompt,
-                userId: "ios-device-id",
+                // L4 (#22): реальный анонимный per-install id вместо 'ios-device-id',
+                // иначе все юзеры делят один rate-limit-бакет (#17).
+                userId: AnonymousUserID.current,
                 imageBase64: request.imageAsBase64() ?? ""
             )
-            let response: AdvisorResponseBody = try await networkClient.post(url: url, body: body)
+
+            // Backend требует X-App-Token (см. backend/functions/ai-advisor/index.js):
+            // закрывает unauthenticated abuse (#20/#14). Токен — из Info.plist (AIVibeAppToken).
+            var headers: [String: String] = [:]
+            if let appToken = Bundle.main.object(forInfoDictionaryKey: "AIVibeAppToken") as? String,
+               !appToken.isEmpty {
+                headers["X-App-Token"] = appToken
+            }
+
+            let response: AdvisorResponseBody = try await networkClient.post(url: url, body: body, headers: headers)
             return DesignAdvice.parse(from: response.text, provider: response.provider)
         }
     )
