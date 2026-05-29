@@ -36,8 +36,10 @@ extension ImageGenClient: DependencyKey {
         generate: { style, roomType, palette in
             // L5 (#22): URL функции берём из Info.plist (ключ AIVibeImageGenURL),
             // не хардкодим плейсхолдер YOUR_..._ID в бандл (Apple отклоняет такие билды).
-            // Если ключ не сконфигурирован — не ходим в сеть, бросаем ошибку.
+            // Ключ присутствует в Info.plist; пустое значение = backend ещё не развёрнут
+            // → graceful fail без сетевого вызова (image-gen пока недоступен).
             guard let urlString = Bundle.main.object(forInfoDictionaryKey: "AIVibeImageGenURL") as? String,
+                  !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   let url = URL(string: urlString) else {
                 throw URLError(.badURL)
             }
