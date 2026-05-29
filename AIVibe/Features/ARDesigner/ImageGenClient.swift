@@ -36,11 +36,17 @@ extension ImageGenClient: DependencyKey {
         generate: { style, roomType, palette in
             // L5 (#22): URL функции берём из Info.plist (ключ AIVibeImageGenURL),
             // не хардкодим плейсхолдер YOUR_..._ID в бандл (Apple отклоняет такие билды).
-            // Ключ присутствует в Info.plist; пустое значение = backend ещё не развёрнут
-            // → graceful fail без сетевого вызова (image-gen пока недоступен).
+            // Пустое значение / отсутствие ключа = backend ещё не развёрнут →
+            // graceful fail: возвращаем пустой результат БЕЗ сетевого вызова и
+            // без ошибки (image-gen пока недоступен). Так фича просто «молчит»,
+            // а не валит каждый запрос с URLError(.badURL) (Codex P1).
             guard let urlString = Bundle.main.object(forInfoDictionaryKey: "AIVibeImageGenURL") as? String,
-                  !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  let url = URL(string: urlString) else {
+                  !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return []
+            }
+            // Ключ задан, но значение не парсится как URL — это реальная ошибка
+            // конфигурации, её скрывать не стоит.
+            guard let url = URL(string: urlString) else {
                 throw URLError(.badURL)
             }
 
