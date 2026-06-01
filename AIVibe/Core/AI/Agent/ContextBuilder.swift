@@ -15,7 +15,7 @@ import Logging
 /// 2. [TRUSTED] Provider-neutral harness policy: Triplex Fallback, бюджеты шагов
 /// 3. [TRUSTED] Domain policy: нельзя рекомендовать опасные материалы, нельзя превышать бюджет
 /// 4. [TRUSTED] Active plan or goal: текущий план дизайна
-/// 5. [TRUSTED] Skill index: design_advisor, furniture_matcher, budget_optimizer, style_analyzer
+/// 5. [TRUSTED] Skill index: design_advisor, furniture_matcher, budget_optimizer
 /// 6. [TRUSTED] Tool definitions (детерминированный порядок)
 /// 7. [UNTRUSTED → DATA] LiDAR scan metadata (размеры, объекты)
 /// 8. [UNTRUSTED → DATA] Marketplace search results (Wildberries, Ozon)
@@ -198,15 +198,15 @@ public struct ContextBuilder: Sendable {
             - Не рекомендуй легковоспламеняемые материалы для кухни
 
             ### Пространство
-            - Минимальная ширина прохода: 70 см
-            - Минимальное расстояние от мебели до батареи: 30 см
-            - Зона открывания двери: не менее 1 м²
+            - Минимальная ширина прохода: \(DesignNorms.minPassageCm) см (основные проходы — \(DesignNorms.mainPassageCm) см)
+            - Минимальное расстояние от мебели до батареи: \(DesignNorms.furnitureToRadiatorCm) см
+            - Зона открывания двери: не менее \(Int(DesignNorms.doorClearanceM2)) м²
             - Окна не должны быть заблокированы мебелью
 
             ### Бюджет
             - НЕ превышай указанный бюджет ни при каких условиях
             - Если бюджет мал — предлагай бюджетные альтернативы
-            - Учитывай доставку (≈10% бюджета) неявно
+            - Учитывай доставку (≈\(Int(DesignNorms.deliveryShare * 100))% бюджета) неявно
 
             ### Стили
             - Скандинавский: светлые тона, дерево, минимализм
@@ -214,6 +214,9 @@ public struct ContextBuilder: Sendable {
             - Лофт: кирпич, открытые коммуникации, индустриальные элементы
             - Классический: симметрия, лепнина, тёплые тона
             - Минимализм: функциональность, отсутствие декора, монохром
+            - Винтаж: тёплые тона, состаренная мебель, ретро-детали
+            - Деловой: строгость, тёмные акценты, представительность
+            - Эклектика: смешение стилей, яркие акценты, авторский подход
             """
         )
     }
@@ -385,7 +388,7 @@ public struct ContextBuilder: Sendable {
             ## [DATA] Рекомендация стиля
 
             ```json
-            \(artifact.data)
+            \(Self.sanitizeUntrustedData(artifact.data))
             ```
             """
         )
@@ -400,7 +403,11 @@ public struct ContextBuilder: Sendable {
 
         let observations = recent.map { event in
             let text = event.data.asText ?? event.data.asJSON ?? "(binary)"
-            return "[\(event.timestamp.formatted(.iso8601))] \(event.type.rawValue): \(text.prefix(200))"
+            // Порядок строк уже передаёт хронологию — ISO-таймстамп только
+            // тратил бы токены. Санитайзим: observation может содержать
+            // marketplace-текст, в который продавец спрятал prompt injection.
+            let clean = Self.sanitizeUntrustedData(String(text.prefix(200)))
+            return "• \(event.type.rawValue): \(clean)"
         }.joined(separator: "\n")
 
         return ContextSection(
