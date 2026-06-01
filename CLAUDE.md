@@ -165,7 +165,7 @@ Core/AI/
 
 ### Документация
 - `SESSION_*.md` (история разработки, append-only)
-- `PROJECT_RULES_v2.md` (источник правил)
+- `docs/archive/PROJECT_RULES_v2.md` (легаси-правила DeepSeek/Windows-эры — архив; актуальный источник правил = этот CLAUDE.md)
 - `docs/archive/DEEPSEEK_*.md` (промпт-история, легаси DeepSeek-эры — архив)
 
 **При сомнениях — спросить пользователя ДО правки.**
@@ -229,7 +229,7 @@ rm ...                         # удаление файлов
 | Вопрос | Файл |
 |--------|------|
 | История разработки | `SESSION_01_init.md` ... `SESSION_07_marketplace_apify.md` |
-| Бизнес-правила, ограничения | `PROJECT_RULES_v2.md` |
+| Бизнес-правила, ограничения | `STRATEGY.md`, этот `CLAUDE.md` (легаси: `docs/archive/PROJECT_RULES_v2.md`) |
 | Архитектурные решения | `complexity-report.md` |
 | Промпт-инструкции (архив) | `docs/archive/DEEPSEEK_PROMPTS.md`, `docs/archive/DEEPSEEK_HISTORY.md` |
 | Архив устаревших планов | `docs/archive/` |

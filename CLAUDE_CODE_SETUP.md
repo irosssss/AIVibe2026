@@ -83,7 +83,7 @@ Ozon и Wildberries, AI на YandexGPT 5 + GigaChat-Max + CoreML fallback (Tripl
 
 ## Технологический стек
 
-- **iOS**: Swift 6 (strict concurrency), iOS 18+, SwiftUI, TCA (Composable Architecture 1.16+)
+- **iOS**: Swift 6.2 (approachable concurrency), iOS 26+, SwiftUI, TCA (Composable Architecture 1.25+)
 - **SPM**: swift-composable-architecture, Kingfisher, swift-log, swift-collections
 - **Backend**: Node.js 20 (ESM), Yandex Cloud Functions, YDB
 - **AI рантайм**: YandexGPT 5 (основной) → GigaChat-Max (fallback) → CoreML (offline)
@@ -223,8 +223,8 @@ Core/AI/
 
 ### Документация
 - `SESSION_*.md` (история разработки, append-only)
-- `PROJECT_RULES_v2.md` (источник правил)
-- `DEEPSEEK_*.md` (промпт-история)
+- `docs/archive/PROJECT_RULES_v2.md` (легаси-правила DeepSeek/Windows-эры — архив; актуальный источник = `CLAUDE.md`)
+- `docs/archive/DEEPSEEK_*.md` (промпт-история, легаси — архив)
 
 **При сомнениях — спросить пользователя ДО правки.**
 
@@ -283,9 +283,9 @@ rm ...                         # удаление файлов
 | Вопрос | Файл |
 |--------|------|
 | История разработки | `SESSION_01_init.md` ... `SESSION_07_marketplace_apify.md` |
-| Бизнес-правила, ограничения | `PROJECT_RULES_v2.md` |
+| Бизнес-правила, ограничения | `STRATEGY.md`, `CLAUDE.md` (легаси: `docs/archive/PROJECT_RULES_v2.md`) |
 | Архитектурные решения | `complexity-report.md` |
-| Промпт-инструкции | `DEEPSEEK_PROMPTS.md`, `DEEPSEEK_HISTORY.md` |
+| Промпт-инструкции (архив) | `docs/archive/DEEPSEEK_PROMPTS.md`, `docs/archive/DEEPSEEK_HISTORY.md` |
 | Архив устаревших планов | `docs/archive/` |
 ```
 
@@ -336,9 +336,8 @@ rm ...                         # удаление файлов
       "Edit(Package.resolved)",
       "Edit(.github/**)",
       "Edit(Fastlane/**)",
-      "Edit(PROJECT_RULES_v2.md)",
       "Edit(SESSION_*.md)",
-      "Edit(DEEPSEEK_*.md)",
+      "Edit(docs/archive/**)",
       "Edit(.swiftlint.yml)",
       "Edit(AIVibe/Core/AI/Providers/**)",
       "Edit(AIVibe/Core/AI/AIProviderRouter.swift)",
