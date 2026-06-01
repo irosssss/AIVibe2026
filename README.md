@@ -23,8 +23,8 @@ iOS-приложение для дизайна интерьеров с AR-рас
 | Архитектура | TCA (The Composable Architecture 1.25+) |
 | AR | RoomPlan 2 + RealityKit + SpatialTrackingSession (iOS 26) |
 | UI | SwiftUI |
-| AI (основной) | YandexGPT 5 Pro |
-| AI (резервный) | GigaChat Ultra |
+| AI (основной) | YandexGPT 5 (`yandexgpt-5/latest`) |
+| AI (резервный) | GigaChat-Max |
 | AI (оффлайн) | Core ML (template matching) |
 | Backend | Yandex Cloud Functions (Node.js 20 ESM) |
 | Маркетплейсы | Apify actors (Wildberries, Ozon) |
@@ -129,9 +129,9 @@ RealityView — AnchorEntity(.plane(.horizontal, .floor))
 ## 🤖 AI Fallback схема
 
 ```
-Запрос → YandexGPT 5 Pro
+Запрос → YandexGPT 5 (yandexgpt-5/latest)
            ↓ (ошибка или timeout 25с)
-         GigaChat Ultra
+         GigaChat-Max
            ↓ (ошибка или timeout 25с)
          Core ML (оффлайн, template matching)
            ↓ (ошибка)

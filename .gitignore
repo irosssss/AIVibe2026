@@ -36,7 +36,8 @@ Carthage/Build/
 
 ## Swift Package Manager
 .build/
-Package.resolved
+# Package.resolved НЕ игнорируем — коммитим для воспроизводимых сборок (пин версий).
+# Xcode генерирует свой в AIVibeApp/.../xcshareddata/swiftpm/Package.resolved.
 
 ## Environment files
 .env

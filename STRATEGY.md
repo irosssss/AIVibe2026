@@ -134,7 +134,7 @@ AgentOrchestrator (Swift Actor)
 
 **Промт:**
 ```
-Я разрабатываю iOS-приложение AIVibe (Swift 6, TCA, RoomPlan, iOS 18+).
+Я разрабатываю iOS-приложение AIVibe (Swift 6, TCA, RoomPlan, iOS 26+).
 
 Создай файл `AIVibe/Features/RoomScan/RoomGeometryExtractor.swift`.
 
@@ -229,7 +229,7 @@ EDGE CASES (обязательно handle):
 
 **Зависимости:**
 - `AIVibe/Features/RoomScan/RoomScanFeature.swift` (уже есть)
-- `RoomPlan` framework (iOS 18+)
+- `RoomPlan` framework (iOS 26+)
 
 ---
 
@@ -488,7 +488,7 @@ struct DesignResponseParser: DesignResponseParsing { ... }
 
 **Промт:**
 ```
-Я разрабатываю AIVibe (Swift 6, RealityKit, iOS 18+). Уже есть FurnitureItem, DesignPlan, RoomGeometry.
+Я разрабатываю AIVibe (Swift 6, RealityKit, iOS 26+). Уже есть FurnitureItem, DesignPlan, RoomGeometry.
 
 Создай `AIVibe/Features/ARDesigner/ARSceneBuilder.swift`.
 
@@ -927,7 +927,7 @@ case designGenerationFailed(String)
 
 **Промт для вызова:**
 ```
-Ты — технический архитектор iOS-приложения AIVibe (Swift 6, TCA, RoomPlan, iOS 18+).
+Ты — технический архитектор iOS-приложения AIVibe (Swift 6, TCA, RoomPlan, iOS 26+).
 
 СУЩЕСТВУЮЩИЕ ПАТТЕРНЫ (следуй им строго):
 - Все внешние зависимости имеют протоколы: AIProviderProtocol, RoomGeometryExtracting, CollisionDetecting
@@ -961,7 +961,7 @@ case designGenerationFailed(String)
 
 **Промт для вызова:**
 ```
-Ты — iOS-разработчик AIVibe (Swift 6, TCA, iOS 18+).
+Ты — iOS-разработчик AIVibe (Swift 6, TCA, iOS 26+).
 
 ПРАВИЛА КОДА:
 - Swift 6 strict: все типы Sendable, actor-изоляция явная
@@ -1052,7 +1052,7 @@ case designGenerationFailed(String)
 
 **Промт для вызова:**
 ```
-Ты — эксперт по промпт-инжинирингу для российских LLM (YandexGPT 5, GigaChat Ultra).
+Ты — эксперт по промпт-инжинирингу для российских LLM (YandexGPT 5, GigaChat-Max).
 
 ТЕКУЩИЙ СИСТЕМНЫЙ ПРОМПТ:
 [вставь текущий системный промпт из PromptBuilder.swift]
@@ -1257,7 +1257,7 @@ analytics.log(event: "design_pipeline_completed", params: [
 
 | # | Риск | Вероят. (1-5) | Влияние (1-5) | Score | Митигация | План отката |
 |---|------|:---:|:---:|:---:|-----------|-------------|
-| R1 | RoomPlan API изменится в iOS 19 | 2 | 5 | 10 | Абстрагировать за `RoomScanningProtocol`, следить за WWDC | Заморозить iOS 18 target на 3 мес |
+| R1 | RoomPlan API изменится в iOS 19 | 2 | 5 | 10 | Абстрагировать за `RoomScanningProtocol`, следить за WWDC | Заморозить iOS 26 target на 3 мес |
 | R2 | YandexGPT повышает цены / меняет API | 3 | 4 | 12 | Triplex fallback уже есть; мониторить changelog | Увеличить лимит GigaChat, CoreML |
 | R3 | App Store реджект за использование камеры/LiDAR | 3 | 5 | 15 | Чёткое NSCameraUsageDescription, не хранить фото на сервере | Переработать Privacy section, реподать |
 | R4 | Crashrate > 2% при LiDAR на старых устройствах | 4 | 4 | 16 | Тестирование iPhone 12/13/14 Pro, guard на RoomPlan availability | Скрыть LiDAR фичу на старых моделях |

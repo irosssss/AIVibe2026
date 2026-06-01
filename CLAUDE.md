@@ -40,6 +40,8 @@ AIVibe/                          # iOS-приложение
 │   └── DI/AppDependencies.swift  # Сборка live router
 ├── Core/
 │   ├── AI/                       # AI-подсистема (см. ниже подробно)
+│   ├── Agents/                   # AgentOrchestrator — пайплайн скан→геометрия→дизайн (для ARDesigner).
+│   │                             #   ⚠️ Это НЕ runtime AI-Agent (тот в Core/AI/Agent/). Разные сущности.
 │   ├── Network/                  # NetworkClient (URLSession)
 │   ├── Storage/                  # StorageClient
 │   └── Analytics/                # AppMetricaAnalytics
@@ -75,7 +77,8 @@ Core/AI/
 │   ├── AgentLoop.swift           # public actor — главный цикл (max 8 шагов)
 │   ├── AgentSession.swift        # public actor — состояние сессии
 │   ├── ContextBuilder.swift      # public struct — 11 секций контекста (§5)
-│   └── AgentObservability.swift  # Метрики, события
+│   ├── AgentObservability.swift  # Метрики, события
+│   └── LangfuseExporter.swift    # Экспорт трейсов в Langfuse (наблюдаемость §13)
 │
 ├── Skills/                       # Runtime скиллы (Blueprint §10)
 │   ├── SkillIndex.swift          # public actor — индекс + 3 стандартных скилла
@@ -162,8 +165,8 @@ Core/AI/
 
 ### Документация
 - `SESSION_*.md` (история разработки, append-only)
-- `PROJECT_RULES_v2.md` (источник правил)
-- `DEEPSEEK_*.md` (промпт-история)
+- `docs/archive/PROJECT_RULES_v2.md` (легаси-правила DeepSeek/Windows-эры — архив; актуальный источник правил = этот CLAUDE.md)
+- `docs/archive/DEEPSEEK_*.md` (промпт-история, легаси DeepSeek-эры — архив)
 
 **При сомнениях — спросить пользователя ДО правки.**
 
@@ -226,7 +229,7 @@ rm ...                         # удаление файлов
 | Вопрос | Файл |
 |--------|------|
 | История разработки | `SESSION_01_init.md` ... `SESSION_07_marketplace_apify.md` |
-| Бизнес-правила, ограничения | `PROJECT_RULES_v2.md` |
+| Бизнес-правила, ограничения | `STRATEGY.md`, этот `CLAUDE.md` (легаси: `docs/archive/PROJECT_RULES_v2.md`) |
 | Архитектурные решения | `complexity-report.md` |
-| Промпт-инструкции | `DEEPSEEK_PROMPTS.md`, `DEEPSEEK_HISTORY.md` |
+| Промпт-инструкции (архив) | `docs/archive/DEEPSEEK_PROMPTS.md`, `docs/archive/DEEPSEEK_HISTORY.md` |
 | Архив устаревших планов | `docs/archive/` |
