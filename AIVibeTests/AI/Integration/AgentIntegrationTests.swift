@@ -880,6 +880,17 @@ final class AgentSkillAutoLoadTests: XCTestCase {
         let matches = await index.matchingSkills(for: "привет, как дела?")
         XCTAssertTrue(matches.isEmpty, "Нейтральная фраза не должна активировать скиллы")
     }
+
+    func test_skillIndex_wholeWordMatchingAvoidsSubstringFalsePositives() async {
+        let index = SkillIndex()
+        // Триггер «стол» как подстрока в «столицу»/«престол» НЕ должен активировать
+        // furniture_matcher — матчинг идёт по границам слов, а не по подстроке.
+        for phrase in ["переезжаю в столицу", "царский престол в музее"] {
+            let matches = await index.matchingSkills(for: phrase)
+            XCTAssertFalse(matches.contains("furniture_matcher"),
+                           "«\(phrase)» не должна активировать furniture_matcher (ложная подстрока «стол»)")
+        }
+    }
 }
 
 // MARK: - Integration Test 10: Connector Health Monitoring

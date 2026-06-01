@@ -140,11 +140,21 @@ public actor SkillIndex {
 
     /// Возвращает Skills, активные для данного запроса (по trigger phrases).
     public func matchingSkills(for text: String) -> [String] {
-        skills.filter { skill in
+        let lowered = text.lowercased()
+        return skills.filter { skill in
             skill.info.triggerPhrases.contains { phrase in
-                text.lowercased().contains(phrase.lowercased())
+                Self.matchesWholeWord(phrase.lowercased(), in: lowered)
             }
         }.map { $0.id }
+    }
+
+    /// Совпадение по границам слов, а не по подстроке. Иначе короткие триггеры
+    /// («стол», «стул», «цена») ложно срабатывают внутри других слов
+    /// («столица», «стульчак», «оценка»). ICU `\b` — Unicode-aware и корректно
+    /// определяет границы кириллических слов.
+    static func matchesWholeWord(_ phrase: String, in text: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: phrase)
+        return text.range(of: "\\b\(escaped)\\b", options: .regularExpression) != nil
     }
 
     /// Автоматически загружает скиллы по триггер-фразам.
