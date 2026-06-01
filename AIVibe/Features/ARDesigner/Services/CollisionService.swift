@@ -53,8 +53,8 @@ public struct CollisionDetector: CollisionDetecting {
             }
         }
 
-        // Проверка свободной зоны 80 см перед дверями
-        let doorClearance: Float = 0.80
+        // Проверка свободной зоны перед дверями (норма из DesignNorms, см → м).
+        let doorClearance = Float(DesignNorms.doorClearanceFrontCm) / 100
         for door in room.doors {
             let doorPos = door.position
             let isBlocked = items.contains { item in
