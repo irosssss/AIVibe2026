@@ -96,10 +96,24 @@ paths:
         service_account_id: REPLACE_WITH_SA_ID
         payload_format_version: "1.0"
 
-  /admin/{proxy+}:
+  # Админ-API блокировок. Пути должны совпадать с роутером backend/index.js
+  # (handleAdminApi срабатывает на path.startsWith('/blocked-users')), поэтому
+  # маршрутизируем напрямую на /blocked-users, без префикса /admin —
+  # payload v1.0 передаёт фактический path в функцию без переписывания.
+  /blocked-users:
     x-yc-apigateway-any-method:
-      summary: Админ-API (любой метод)
-      operationId: admin
+      summary: Админ-API блокировок (список)
+      operationId: blockedUsers
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /blocked-users/{proxy+}:
+    x-yc-apigateway-any-method:
+      summary: Админ-API блокировок (stats / unblock / cleanup)
+      operationId: blockedUsersProxy
       parameters:
         - name: proxy
           in: path
