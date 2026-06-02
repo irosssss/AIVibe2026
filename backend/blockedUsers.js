@@ -1,8 +1,11 @@
 /**
  * Blocked Users Manager — управление блокировками пользователей AIVibe
  *
+ * Хранение in-memory: состояние сбрасывается при cold start функции.
+ * YDB persistence — следующая итерация.
+ *
  * Функционал:
- *   - Persistent storage: blocked_users.json (создаётся при первом запуске)
+ *   - In-memory storage: два Map (blockedStore, strikesStore)
  *   - Strike counting: 3 strikes (severity 3) → 24h ban
  *   - Immediate block: severity 4-5 → instant 24h ban
  *   - Auto-cleanup: expired blocks удаляются при каждой проверке
@@ -22,16 +25,6 @@
  *   }
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Путь к JSON-хранилищу (рядом с этим файлом)
-const STORAGE_FILE = path.join(__dirname, 'blocked_users.json');
-
 // TTL блокировки: 24 часа
 const BAN_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -39,47 +32,14 @@ const BAN_TTL_MS = 24 * 60 * 60 * 1000;
 const STRIKE_THRESHOLD = 3;
 
 // ============================================================================
-// Persistence
+// In-memory storage
 // ============================================================================
+// blockedStore: userId → запись блокировки
+// strikesStore: userId → { count, lastTs, history[] }
+// При холодном старте функции оба Map пусты — это допустимо для MVP.
 
-function loadStorage() {
-  try {
-    if (fs.existsSync(STORAGE_FILE)) {
-      const raw = fs.readFileSync(STORAGE_FILE, { encoding: 'utf8' });
-      const parsed = JSON.parse(raw);
-      return validateStorage(parsed);
-    }
-  } catch (e) {
-    // Если файл битый — пишем в лог, создаём пустое хранилище
-    console.error('Failed to load blocked_users.json:', (e && e.message) || 'unknown');
-  }
-  return { users: {}, strikes: {} };
-}
-
-function saveStorage(data) {
-  // Минимизируем write-amplification: не пишем каждый раз, но сейчас sync
-  try {
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), { encoding: 'utf8' });
-  } catch (e) {
-    console.error('Failed to save blocked_users.json:', (e && e.message) || 'unknown');
-  }
-}
-
-function validateStorage(parsed) {
-  const result = { users: {}, strikes: {} };
-  if (parsed && typeof parsed === 'object') {
-    if (parsed.users && typeof parsed.users === 'object') {
-      result.users = parsed.users;
-    }
-    if (parsed.strikes && typeof parsed.strikes === 'object') {
-      result.strikes = parsed.strikes;
-    }
-  }
-  return result;
-}
-
-// In-memory (при рестарте YCF читаем с диска)
-const memStorage = loadStorage();
+const blockedStore = new Map();
+const strikesStore = new Map();
 
 // ============================================================================
 // Core functions
@@ -109,19 +69,16 @@ function sanitizeUserId(userId) {
 
 // ── Cleanup expired blocks ─────────────────────────────────────────────────
 function cleanupExpired() {
-  const beforeCount = Object.keys(memStorage.users).length;
+  const beforeCount = blockedStore.size;
   let cleaned = 0;
 
-  for (const [userId, entry] of Object.entries(memStorage.users)) {
+  for (const [userId, entry] of blockedStore) {
     if (isExpired(entry)) {
-      delete memStorage.users[userId];
+      blockedStore.delete(userId);
       cleaned++;
     }
   }
 
-  if (cleaned > 0) {
-    saveStorage(memStorage);
-  }
   return { before: beforeCount, after: beforeCount - cleaned, cleaned };
 }
 
@@ -130,12 +87,11 @@ function isBlocked(userIdRaw) {
   const userId = sanitizeUserId(userIdRaw);
   if (!userId) return { blocked: false };
 
-  const entry = memStorage.users[userId];
+  const entry = blockedStore.get(userId);
   if (!entry) return { blocked: false };
 
   if (isExpired(entry)) {
-    delete memStorage.users[userId];
-    saveStorage(memStorage);
+    blockedStore.delete(userId);
     return { blocked: false };
   }
 
@@ -155,7 +111,7 @@ function addStrike(userIdRaw, promptResult) {
   const userId = sanitizeUserId(userIdRaw);
   if (!userId) return { banned: false, strikes: 0 };
 
-  const current = memStorage.strikes[userId] || { count: 0, lastTs: null, history: [] };
+  const current = strikesStore.get(userId) || { count: 0, lastTs: null, history: [] };
   current.count += 1;
   current.lastTs = nowIso();
   current.history.push({
@@ -171,7 +127,7 @@ function addStrike(userIdRaw, promptResult) {
     current.history = current.history.slice(-20);
   }
 
-  memStorage.strikes[userId] = current;
+  strikesStore.set(userId, current);
 
   // Check threshold
   if (current.count >= STRIKE_THRESHOLD) {
@@ -183,11 +139,9 @@ function addStrike(userIdRaw, promptResult) {
       isStrikeBan: true,
       strikeCount: current.count,
     });
-    saveStorage(memStorage);
     return { banned: true, strikes: current.count, banResult };
   }
 
-  saveStorage(memStorage);
   return { banned: false, strikes: current.count };
 }
 
@@ -208,17 +162,16 @@ function blockUser(userIdRaw, opts = {}) {
     severity: Math.min(Math.max(opts.severity || 4, 1), 5),
     rule: truncate(opts.rule || '', 128),
     isStrikeBan: !!opts.isStrikeBan,
-    strikeCount: opts.strikeCount || (memStorage.strikes[userId]?.count || 0),
+    strikeCount: opts.strikeCount || (strikesStore.get(userId)?.count || 0),
   };
 
-  memStorage.users[userId] = entry;
+  blockedStore.set(userId, entry);
 
   // Reset strikes on ban (they earned it, start fresh after ban)
-  if (memStorage.strikes[userId]) {
-    memStorage.strikes[userId].count = 0;
+  const strikes = strikesStore.get(userId);
+  if (strikes) {
+    strikes.count = 0;
   }
-
-  saveStorage(memStorage);
 
   return {
     ok: true,
@@ -235,13 +188,11 @@ function unblockUser(userIdRaw) {
   const userId = sanitizeUserId(userIdRaw);
   if (!userId) return { ok: false, error: 'Invalid userId' };
 
-  const hadEntry = !!memStorage.users[userId];
-  delete memStorage.users[userId];
-  
-  // Also clear strikes
-  delete memStorage.strikes[userId];
+  const hadEntry = blockedStore.has(userId);
+  blockedStore.delete(userId);
 
-  saveStorage(memStorage);
+  // Also clear strikes
+  strikesStore.delete(userId);
 
   return { ok: true, userId, wasBlocked: hadEntry };
 }
@@ -250,7 +201,7 @@ function unblockUser(userIdRaw) {
 function listBlocked() {
   cleanupExpired(); // clean before listing
 
-  const list = Object.values(memStorage.users).map((entry) => ({
+  const list = Array.from(blockedStore.values()).map((entry) => ({
     userId: entry.userId,
     blockedAt: entry.blockedAt,
     expiresAt: entry.expiresAt,
@@ -275,7 +226,7 @@ function listBlocked() {
 
 // ── Statistics ─────────────────────────────────────────────────────────────
 function getStats() {
-  const all = Object.values(memStorage.users);
+  const all = Array.from(blockedStore.values());
   const active = all.filter((e) => !isExpired(e));
   const totalBans = all.filter((e) => e.isStrikeBan).length;
 

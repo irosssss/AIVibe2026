@@ -4,9 +4,9 @@
 // Security pipeline (CLAUDE.md требование, аналог backend/index.js):
 //   1. APP_TOKEN header check
 //   2. Input validation (length, regex)
-//   3. Rate limit per userId
+//   3. Rate limit per IP + per userId
 //   4. promptGuard на user-supplied query (попадает в YandexGPT prompt)
-//   5. Apify runActor + YandexGPT enrich
+//   5. Параллельный поиск Wildberries + Ozon (Apify), нормализация, YandexGPT enrich
 
 import { runActor } from '../../shared/apify-client.js';
 import { callYandexGPT } from '../../shared/yandexgpt.js';
@@ -28,6 +28,15 @@ const ALLOWED_STYLES = new Set([
   'classic_russian', 'eclectic', 'vintage', 'professional',
   'современный', // legacy fallback в текущем коде
 ]);
+
+// ВАЖНО: ID акторов нужно подтвердить на apify.com/store перед продакшеном.
+// Поля в выдаче актора тоже стоит сверить во время smoke-теста (см. normalize*).
+const WILDBERRIES_ACTOR = 'epctex/wildberries-scraper';
+const OZON_ACTOR = 'epctex/ozon-scraper';
+
+const MAX_ITEMS_PER_SOURCE = 8;
+const MAX_RESULTS = 10;
+const ACTOR_OPTIONS = { timeoutSecs: 40, memoryMbytes: 512 };
 
 const rateLimitStore = new Map();
 
@@ -125,30 +134,51 @@ export const handler = async (event, context) => {
       return buildResponse(400, { error: 'Content policy violation' });
     }
 
-    // 6. Secrets + Apify
+    // 6. Secrets + параллельный поиск по двум маркетплейсам.
     await getSecrets();
 
-    const recommendations = await runActor(
-      'apify/product-recommendation-agent', // ← заменить на ID из mega-list
-      {
-        query: `${query} для интерьера в стиле ${safeStyle}`,
-        maxResults: 10,
-        language: 'ru',
-        marketplaces: ['wildberries.ru', 'ozon.ru'],
-      },
-      { timeoutSecs: 60, memoryMbytes: 512 }
-    );
+    const actorInput = { search: query, maxItems: MAX_ITEMS_PER_SOURCE, proxy: { useApifyProxy: true } };
 
-    const filtered = safeBudget
-      ? recommendations.filter(r => !r.price || r.price <= safeBudget)
-      : recommendations;
+    // Один упавший актор не валит весь запрос.
+    const [wbResult, ozonResult] = await Promise.allSettled([
+      runActor(WILDBERRIES_ACTOR, actorInput, ACTOR_OPTIONS),
+      runActor(OZON_ACTOR, actorInput, ACTOR_OPTIONS),
+    ]);
 
-    const enriched = await enrichWithYandexGPT(filtered, query, safeStyle);
+    const wbItems = settledItems(wbResult, 'wildberries');
+    const ozonItems = settledItems(ozonResult, 'ozon');
+
+    // Нормализация к общему формату.
+    let products = [...normalizeWildberries(wbItems), ...normalizeOzon(ozonItems)];
+
+    // Фильтр по бюджету (safeBudget уже провалидирован выше).
+    if (safeBudget) {
+      products = products.filter((p) => !p.price || p.price <= safeBudget);
+    }
+    products = products.slice(0, MAX_RESULTS);
+
+    const marketplace_sources = { wildberries: wbItems.length, ozon: ozonItems.length };
+    const rateLimit = { remaining: rateInfo.remaining, resetInMs: RATE_WINDOW_MS };
+
+    // Оба источника пусты — понятный ответ, без ошибки.
+    if (products.length === 0) {
+      return buildResponse(200, {
+        products: [],
+        message: 'Товары не найдены, попробуйте изменить запрос',
+        marketplace_sources,
+        latency_ms: Date.now() - startTime,
+        rateLimit,
+      });
+    }
+
+    // AI-объяснения от YandexGPT (best-effort: при ошибке вернём без них).
+    const enriched = await enrichWithYandexGPT(products, query, safeStyle);
 
     return buildResponse(200, {
       products: enriched,
+      marketplace_sources,
       latency_ms: Date.now() - startTime,
-      rateLimit: { remaining: rateInfo.remaining, resetInMs: RATE_WINDOW_MS },
+      rateLimit,
     });
 
   } catch (err) {
@@ -161,10 +191,83 @@ export const handler = async (event, context) => {
   }
 };
 
+// ─── Результаты Promise.allSettled ───────────────────────────────
+
+function settledItems(result, label) {
+  if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+    return result.value;
+  }
+  if (result.status === 'rejected') {
+    console.warn(`[marketplace] ${label} actor failed:`, result.reason?.message ?? result.reason);
+  }
+  return [];
+}
+
+// ─── Нормализация ────────────────────────────────────────────────
+// Поля акторов могут отличаться — берём первое подходящее имя поля.
+
+function pickFirst(obj, keys) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
+function normalizePrice(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  const n = Number(String(raw).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function firstImage(obj) {
+  const direct = pickFirst(obj, ['imageUrl', 'image', 'img', 'thumbnail']);
+  if (direct) return direct;
+  if (Array.isArray(obj?.images) && obj.images.length) {
+    const first = obj.images[0];
+    return typeof first === 'string' ? first : (first?.url ?? '');
+  }
+  return '';
+}
+
+function normalizeWildberries(items) {
+  return items.map((it) => {
+    const article = pickFirst(it, ['article', 'id', 'sku', 'nmId', 'productId']);
+    return {
+      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
+      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
+      url:
+        pickFirst(it, ['url', 'link', 'productUrl']) ??
+        (article ? `https://www.wildberries.ru/catalog/${article}/detail.aspx` : ''),
+      imageUrl: firstImage(it),
+      marketplace: 'wildberries',
+      article: article != null ? String(article) : '',
+    };
+  });
+}
+
+function normalizeOzon(items) {
+  return items.map((it) => {
+    const article = pickFirst(it, ['article', 'id', 'sku', 'productId']);
+    return {
+      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
+      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
+      url: pickFirst(it, ['url', 'link', 'productUrl']) ?? '',
+      imageUrl: firstImage(it),
+      marketplace: 'ozon',
+      article: article != null ? String(article) : '',
+    };
+  });
+}
+
+// ─── AI-объяснения ───────────────────────────────────────────────
+
 async function enrichWithYandexGPT(products, query, roomStyle) {
   if (products.length === 0) return [];
 
-  const list = products.slice(0, 5)
+  const list = products
+    .slice(0, 5)
     .map((p, i) => `${i + 1}. ${p.name} — ${p.price ?? '?'} руб.`)
     .join('\n');
 

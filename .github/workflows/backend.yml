@@ -1,4 +1,13 @@
-name: Backend CI
+# Backend CI/CD — синтаксис + тесты, затем деплой в Yandex Cloud.
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#   YC_SA_KEY_JSON  — содержимое key.json (полный JSON сервисного аккаунта)
+#   YC_FOLDER_ID    — Yandex Cloud folder ID
+#   SA_ID           — ID сервисного аккаунта
+#   LOCKBOX_ID      — ID Lockbox-секрета
+# Также создать Environment "production" (Settings → Environments).
+
+name: Backend CI/CD
 
 # Запускается только когда меняются файлы backend/** — чисто iOS-PR не тратят CI время.
 on:
@@ -30,7 +39,7 @@ jobs:
           node-version: '20'
 
       - name: Syntax check (node --check)
-        # Прогоняем все .js файлы в backend, кроме node_modules и тестов.
+        # Прогоняем все .js файлы в backend, кроме node_modules.
         # `node --check` парсит файл без выполнения — ловит синтаксические ошибки.
         run: |
           find . -name "*.js" \
@@ -40,5 +49,44 @@ jobs:
 
       - name: Run tests (node --test)
         # Node 20 имеет встроенный test runner — не нужны зависимости (jest/mocha).
-        # Это согласуется с CLAUDE.md: «backend без внешних npm-зависимостей».
         run: node --test
+
+  deploy:
+    name: Deploy → Yandex Cloud
+    runs-on: ubuntu-latest
+    needs: syntax-and-tests
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yc CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Authenticate
+        run: |
+          echo '${{ secrets.YC_SA_KEY_JSON }}' > /tmp/sa-key.json
+          yc config set service-account-key /tmp/sa-key.json
+          yc config set folder-id ${{ secrets.YC_FOLDER_ID }}
+
+      - name: Deploy functions
+        env:
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          SA_ID: ${{ secrets.SA_ID }}
+          LOCKBOX_ID: ${{ secrets.LOCKBOX_ID }}
+        run: bash backend/deploy.sh
+
+      - name: Smoke test
+        run: |
+          # API Gateway создаётся один раз вручную (Фаза 3). Если его ещё нет —
+          # не валим job: функции уже задеплоены.
+          if yc serverless api-gateway get aivibe-gateway --format json >/tmp/gw.json 2>/dev/null; then
+            GATEWAY_URL="https://$(python3 -c "import json;print(json.load(open('/tmp/gw.json'))['domain'])")"
+            curl -f "$GATEWAY_URL/health"
+            echo "Deployed: $GATEWAY_URL"
+          else
+            echo "⚠️  API Gateway 'aivibe-gateway' не найден — создай его один раз (Фаза 3). Функции задеплоены."
+          fi
