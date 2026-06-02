@@ -1,0 +1,113 @@
+# backend/api-gateway.yaml — Yandex Cloud API Gateway (единая точка входа).
+#
+# iOS обращается на один URL, а Gateway маршрутизирует по path на нужную
+# Cloud Function.
+#
+# Перед созданием шлюза заменить плейсхолдеры реальными ID:
+#   FN_ADVISOR=$(yc serverless function get aivibe-ai-advisor --format json | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+#   FN_MARKET=$(yc serverless function get aivibe-marketplace  --format json | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+#   FN_IMGGEN=$(yc serverless function get aivibe-image-gen    --format json | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+#   SA_ID=$(yc iam service-account get aivibe-sa --format json | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+#   sed -i '' "s/REPLACE_WITH_FUNCTION_ID_ai-advisor/$FN_ADVISOR/g" backend/api-gateway.yaml
+#   sed -i '' "s/REPLACE_WITH_FUNCTION_ID_marketplace/$FN_MARKET/g" backend/api-gateway.yaml
+#   sed -i '' "s/REPLACE_WITH_FUNCTION_ID_image-gen/$FN_IMGGEN/g" backend/api-gateway.yaml
+#   sed -i '' "s/REPLACE_WITH_SA_ID/$SA_ID/g" backend/api-gateway.yaml
+# (на Linux sed без '' — см. plan, Фаза 3)
+
+openapi: "3.0.0"
+info:
+  title: AIVibe API
+  version: "2.0"
+
+x-yc-apigateway:
+  cors:
+    origin: '*'
+    methods: 'GET,POST,DELETE,OPTIONS'
+    allowedHeaders: 'Content-Type,X-App-Token,X-Request-Id'
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /analyze:
+    post:
+      summary: AI-расстановка мебели
+      operationId: analyze
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /marketplace/search:
+    post:
+      summary: Поиск товаров на маркетплейсах
+      operationId: marketplaceSearch
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_marketplace
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /image-gen:
+    post:
+      summary: Генерация изображений интерьеров
+      operationId: imageGen
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_image-gen
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /circuit:
+    get:
+      summary: Статус circuit breaker
+      operationId: circuitStatus
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /circuit/reset:
+    post:
+      summary: Сброс circuit breaker
+      operationId: circuitReset
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /cache/clear:
+    post:
+      summary: Очистка кэша ответов
+      operationId: cacheClear
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /admin/{proxy+}:
+    x-yc-apigateway-any-method:
+      summary: Админ-API (любой метод)
+      operationId: admin
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_ai-advisor
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"

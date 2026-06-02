@@ -41,6 +41,8 @@ Package.resolved
 Secrets.plist
 *.p12
 *.mobileprovision
+key.json
+backend/tmp/
 
 ## macOS
 .DS_Store
