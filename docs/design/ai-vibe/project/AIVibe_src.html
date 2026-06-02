@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIVibe — Design system &amp; screens</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+      background: #f0eee9;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #root { height: 100vh; }
+  </style>
+</head>
+<body>
+  <template id="__bundler_thumbnail" data-bg-color="#F6F2EB">
+    <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1200" height="800" fill="#F6F2EB"/>
+      <!-- iPhone silhouette -->
+      <rect x="430" y="120" width="340" height="560" rx="56" fill="#FFFCF6" stroke="#1C1916" stroke-opacity="0.08" stroke-width="2"/>
+      <rect x="540" y="138" width="120" height="28" rx="14" fill="#1C1916"/>
+      <!-- title block -->
+      <rect x="468" y="210" width="180" height="22" rx="6" fill="#1C1916"/>
+      <rect x="468" y="244" width="120" height="12" rx="4" fill="#6E665B" opacity="0.6"/>
+      <!-- hero CTA -->
+      <rect x="468" y="282" width="264" height="160" rx="20" fill="#EFE0C2"/>
+      <rect x="498" y="402" width="204" height="32" rx="14" fill="#C2674A"/>
+      <!-- project cards row -->
+      <rect x="468" y="466" width="124" height="96" rx="16" fill="#FFFCF6" stroke="#1C1916" stroke-opacity="0.06" stroke-width="1"/>
+      <rect x="608" y="466" width="124" height="96" rx="16" fill="#FFFCF6" stroke="#1C1916" stroke-opacity="0.06" stroke-width="1"/>
+      <rect x="482" y="478" width="96" height="48" rx="8" fill="#CFDCC8"/>
+      <rect x="622" y="478" width="96" height="48" rx="8" fill="#E8C9BC"/>
+      <!-- tab bar -->
+      <rect x="468" y="600" width="264" height="56" rx="20" fill="#EFEAE1"/>
+      <circle cx="510" cy="628" r="6" fill="#C2674A"/>
+      <circle cx="570" cy="628" r="6" fill="#A39B8E"/>
+      <circle cx="630" cy="628" r="6" fill="#A39B8E"/>
+      <circle cx="690" cy="628" r="6" fill="#A39B8E"/>
+      <!-- wordmark -->
+      <text x="600" y="744" font-family="-apple-system, system-ui, sans-serif" font-size="28" font-weight="700" fill="#1C1916" text-anchor="middle" letter-spacing="2">AIVibe</text>
+    </svg>
+  </template>
+
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tokens.jsx"></script>
+  <script type="text/babel" src="ds.jsx"></script>
+  <script type="text/babel" src="voice.jsx"></script>
+  <script type="text/babel" src="home.jsx"></script>
+  <script type="text/babel" src="chat.jsx"></script>
+  <script type="text/babel" src="scan.jsx"></script>
+  <script type="text/babel" src="ar.jsx"></script>
+  <script type="text/babel" src="product.jsx"></script>
+  <script type="text/babel" src="canvas.jsx"></script>
+</body>
+</html>

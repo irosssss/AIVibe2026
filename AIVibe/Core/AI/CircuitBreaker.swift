@@ -84,8 +84,7 @@ public actor CircuitBreaker {
             let reopenAt = Date().addingTimeInterval(timeout)
             state = .open(until: reopenAt)
             logger.warning(
-                "🔴 Circuit Breaker ОТКРЫТ на \(Int(timeout))с " +
-                "(провалов подряд: \(failureCount))"
+                "🔴 Circuit Breaker ОТКРЫТ на \(Int(timeout))с (провалов подряд: \(failureCount))"
             )
         } else {
             logger.warning(

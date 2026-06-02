@@ -79,9 +79,21 @@ struct RoomScanView: View {
     }
 
     private var scanningView: some View {
-#if canImport(RoomPlan)
+#if targetEnvironment(simulator)
+        // На симуляторе нет камеры/LiDAR — показываем заглушку.
+        ZStack {
+            Color(.systemGray6).ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(Strings.noLiDAR)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+        }
+#else
         RoomCaptureRepresentable(
-            onCapturedRoom: { capturedRoom in
+            onCapturedRoom: { [store] capturedRoom in
                 // CapturedRoom is not Encodable; export via USDZ.
                 let tempURL = FileManager.default.temporaryDirectory
                     .appendingPathComponent("room_scan_\(UUID().uuidString).usdz")
@@ -89,13 +101,15 @@ struct RoomScanView: View {
                     try capturedRoom.export(to: tempURL)
                     let data = try Data(contentsOf: tempURL)
                     try? FileManager.default.removeItem(at: tempURL)
-                    store.send(.scanDidSucceed(data))
+                    Task { @MainActor in store.send(.scanDidSucceed(data)) }
                 } catch {
-                    store.send(.scanDidFail("USDZ export failed: \(error.localizedDescription)"))
+                    let msg = error.localizedDescription
+                    Task { @MainActor in store.send(.scanDidFail("USDZ export failed: \(msg)")) }
                 }
             },
-            onError: { error in
-                store.send(.scanDidFail(error.localizedDescription))
+            onError: { [store] error in
+                let msg = error.localizedDescription
+                Task { @MainActor in store.send(.scanDidFail(msg)) }
             }
         )
         .overlay(alignment: .bottom) {
@@ -107,17 +121,6 @@ struct RoomScanView: View {
             .padding()
         }
         .ignoresSafeArea()
-#else
-        ZStack {
-            Color(.systemGray6).ignoresSafeArea()
-            VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                Text(Strings.noLiDAR)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-        }
 #endif
     }
 
@@ -162,8 +165,10 @@ struct RoomScanView: View {
 
 // MARK: - RoomCapture ViewRepresentable (RoomPlan)
 
-#if canImport(RoomPlan)
 import RoomPlan
+
+/// RoomCaptureSession не Sendable — обёртка для передачи в actor.
+private struct SessionBox: @unchecked Sendable { let value: RoomCaptureSession }
 
 struct RoomCaptureRepresentable: UIViewRepresentable {
     let onCapturedRoom: @Sendable (CapturedRoom) -> Void
@@ -171,8 +176,9 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
 
     func makeUIView(context: Context) -> RoomCaptureView {
         let view = RoomCaptureView(frame: .zero)
-        view.captureSession = context.coordinator.session
         view.delegate = context.coordinator
+        // Используем встроенную сессию RoomCaptureView (read-only в iOS 18+)
+        context.coordinator.assignSession(view.captureSession)
         return view
     }
 
@@ -188,11 +194,12 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         )
     }
 
-    class Coordinator: NSObject, RoomCaptureViewDelegate {
+    @objc(RoomCaptureCoordinator)
+    class Coordinator: NSObject, RoomCaptureViewDelegate, NSCoding {
 
         // MARK: Session
 
-        let session = RoomCaptureSession()
+        private var session: RoomCaptureSession!
 
         // MARK: Callbacks
 
@@ -211,11 +218,24 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
             self.onError = onError
         }
 
+        // MARK: NSCoding
+
+        func encode(with coder: NSCoder) {}
+
+        required init?(coder: NSCoder) { return nil }
+
+        /// Принимает сессию от RoomCaptureView (read-only в iOS 18+).
+        func assignSession(_ session: RoomCaptureSession) {
+            self.session = session
+        }
+
         func startIfNeeded() {
-            guard !didStart else { return }
+            guard !didStart, let session else { return }
             didStart = true
-            // Register session so reducer can stop it
-            Task { await RoomScanSession.shared.register(session) }
+            let box = SessionBox(value: session)
+            Task {
+                await RoomScanSession.shared.register(box.value)
+            }
             let config = RoomCaptureSession.Configuration()
             session.run(configuration: config)
         }
@@ -223,27 +243,28 @@ struct RoomCaptureRepresentable: UIViewRepresentable {
         // MARK: RoomCaptureViewDelegate
 
         func captureView(
-            shouldPresentRoomDataFor capturingData: RoomCaptureView.CapturingData
+            shouldPresent roomDataForProcessing: CapturedRoomData,
+            error: (any Error)?
         ) -> Bool {
-            true
+            if let error {
+                onError(error)
+                return false
+            }
+            return true
         }
 
         func captureView(
-            _ captureView: RoomCaptureView,
-            didPresent processedRoom: CapturedRoom
+            didPresent processedResult: CapturedRoom,
+            error: (any Error)?
         ) {
-            onCapturedRoom(processedRoom)
-        }
-
-        func captureView(
-            _ captureView: RoomCaptureView,
-            didErrorWith error: Error
-        ) {
-            onError(error)
+            if let error {
+                onError(error)
+            } else {
+                onCapturedRoom(processedResult)
+            }
         }
     }
 }
-#endif
 
 // MARK: - Preview
 

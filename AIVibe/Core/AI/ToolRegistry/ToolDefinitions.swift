@@ -4,6 +4,14 @@
 
 import Foundation
 
+// MARK: - Sendable Box
+
+/// Обёртка для передачи `[String: Any]` через actor boundaries (Swift 6).
+public struct SendableBox: @unchecked Sendable {
+    public let value: [String: Any]
+    public init(_ value: [String: Any]) { self.value = value }
+}
+
 // MARK: - Risk Class
 
 /// Уровень риска инструмента. Определяет политику выполнения.
@@ -259,7 +267,7 @@ public enum ToolSideEffect: String, Sendable, Equatable {
 // MARK: - Tool Call Request
 
 /// Запрос на вызов инструмента (парсится из model output).
-public struct ToolCallRequest: Sendable, Equatable {
+public struct ToolCallRequest: @unchecked Sendable, Equatable {
     /// ID вызова (из модели).
     public let id: UUID
 

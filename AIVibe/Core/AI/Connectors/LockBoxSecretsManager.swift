@@ -19,7 +19,7 @@ import Logging
 /// connector: ozon_api
 /// auth: Yandex Lockbox (API key + Client-ID)
 /// ```
-public actor LockBoxSecretsManager: Sendable {
+public actor LockBoxSecretsManager {
 
     // MARK: - Secret Keys
 
@@ -32,6 +32,8 @@ public actor LockBoxSecretsManager: Sendable {
         case yandexFolderId = "YANDEX_FOLDER_ID"
         case gigachatClientSecret = "GIGACHAT_CLIENT_SECRET"
         case appToken = "APP_TOKEN"
+        case langfusePublicKey = "LANGFUSE_PUBLIC_KEY"
+        case langfuseSecretKey = "LANGFUSE_SECRET_KEY"
     }
 
     // MARK: - State
@@ -160,13 +162,13 @@ public enum EnvironmentLoader {
             let value = String(parts[1]).trimmingCharacters(in: .whitespaces)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
 
-            setenv(key, value, 1)
+            Darwin.setenv(key, value, 1)
         }
     }
 
     /// Устанавливает одну переменную окружения.
     public static func setenv(_ name: String, _ value: String) {
-        setenv(name, value, 1)
+        Darwin.setenv(name, value, 1)
     }
 }
 
@@ -181,7 +183,7 @@ public enum EnvironmentLoader {
 /// - `lastCheck` — время последней проверки
 /// - `consecutiveFailures` — счётчик ошибок подряд
 /// - `cooldownUntil` — до какого времени пропускать запросы
-public actor ConnectorHealthMonitor: Sendable {
+public actor ConnectorHealthMonitor {
 
     // MARK: - State
 

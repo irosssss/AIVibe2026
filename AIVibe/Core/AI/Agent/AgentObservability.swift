@@ -109,9 +109,14 @@ public actor ObservabilityCollector {
     /// Максимальное количество trace-записей (предотвращает утечку памяти).
     private let maxTraces = 1000
 
+    /// Опциональный экспортёр в Langfuse (активируется при наличии ключей).
+    private let langfuseExporter: LangfuseExporter?
+
     // MARK: - Init
 
-    public init() {}
+    public init(langfuseExporter: LangfuseExporter? = nil) {
+        self.langfuseExporter = langfuseExporter
+    }
 
     // MARK: - Trace Recording
 
@@ -124,6 +129,11 @@ public actor ObservabilityCollector {
 
         // Логируем в JSON (Yandex Cloud Logging подхватит)
         logger.info("📊 TRACE: \(event.toJSON())")
+
+        // Экспорт в Langfuse (если настроен)
+        if let exporter = langfuseExporter {
+            Task { await exporter.export(event, sessionId: event.sessionId) }
+        }
 
         // Ограничиваем размер traces
         if traces.count > maxTraces {
@@ -611,7 +621,7 @@ public actor EvalProbeRunner {
     /// Проверяет launch gates (Blueprint §13: Launch gates checklist).
     /// - Returns: `true` если все launch-gate пробы пройдены.
     public func allLaunchGatesPassed() -> Bool {
-        let launchGateResults = results.filter { _, probeId in
+        let launchGateResults = results.filter { probeId, _ in
             EvalProbe.standardProbes.first(where: { $0.id == probeId })?.isLaunchGate ?? false
         }
         return launchGateResults.values.allSatisfy(\.passed)

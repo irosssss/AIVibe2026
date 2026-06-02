@@ -112,6 +112,7 @@ public actor ToolRegistry {
     ///
     /// - Parameter call: Запрос на вызов инструмента (из model output).
     /// - Returns: `ToolResult` с результатом выполнения.
+    // swiftlint:disable:next function_body_length
     public func execute(call: ToolCallRequest) async -> ToolResult {
         let startTime = Date()
 
@@ -149,7 +150,7 @@ public actor ToolRegistry {
         }
 
         // 3. Permission check
-        let decision = await permissionEngine.evaluate(
+        let decision = permissionEngine.evaluate(
             toolName: call.name,
             riskClass: tool.riskClass,
             arguments: validated
@@ -231,10 +232,11 @@ public actor ToolRegistry {
     ) async throws -> String {
         let timeout = tool.timeout
 
+        let box = SendableBox(validated)
         return try await withThrowingTaskGroup(of: String.self) { group in
             // Задача выполнения
             group.addTask {
-                try await tool.execute(validated: validated)
+                try await tool.execute(validated: box.value)
             }
 
             // Задача таймаута
@@ -254,7 +256,7 @@ public actor ToolRegistry {
 
     /// Обновляет контекст сессии в PermissionEngine.
     public func updateSessionContext(_ context: SessionContext) async {
-        await permissionEngine.updateContext(context)
+        permissionEngine.updateContext(context)
     }
 }
 
@@ -300,7 +302,7 @@ private enum AgentLoopKey: DependencyKey {
         }
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.liveValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [])
         )
     }()
 
@@ -308,7 +310,7 @@ private enum AgentLoopKey: DependencyKey {
         let registry = ToolRegistry()
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.testValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [])
         )
     }()
 
@@ -319,7 +321,7 @@ private enum AgentLoopKey: DependencyKey {
         }
         return AgentLoop(
             toolRegistry: registry,
-            providerRouter: DependencyValues.previewValue.aiRouter
+            providerRouter: AIProviderRouter(providers: [MockAIProvider()])
         )
     }()
 }

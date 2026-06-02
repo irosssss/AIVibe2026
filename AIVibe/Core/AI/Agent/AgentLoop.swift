@@ -141,7 +141,7 @@ public actor AgentLoop {
     private let providerRouter: AIProviderRouter
 
     /// Индекс скиллов.
-    private let skillIndex: SkillIndex
+    private let skillIndex: SkillIndexSnapshot
 
     /// Permission engine.
     private let permissionEngine: PermissionEngine
@@ -164,7 +164,7 @@ public actor AgentLoop {
         contextBuilder: ContextBuilder = ContextBuilder(),
         toolRegistry: ToolRegistry,
         providerRouter: AIProviderRouter,
-        skillIndex: SkillIndex = .standard,
+        skillIndex: SkillIndexSnapshot = .standard,
         permissionEngine: PermissionEngine = PermissionEngine(),
         toolScheduler: ToolScheduler = ToolScheduler(),
         resultLimiter: ResultLimiter = ResultLimiter(),
@@ -188,12 +188,13 @@ public actor AgentLoop {
     ///   - request: Запрос пользователя.
     ///   - session: Сессия (новая или существующая).
     /// - Returns: Результат работы агента.
+    // swiftlint:disable:next function_body_length
     public func run(
         request: UserRequest,
         session: AgentSession
     ) async -> AgentLoopResult {
 
-        let maxSteps = await session.maxSteps
+        let maxSteps = session.maxSteps
 
         logger.info("🚀 Агент запущен: \"\(request.message.prefix(80))...\" [\(request.inputType.rawValue)]")
 
@@ -263,20 +264,21 @@ public actor AgentLoop {
             // 6. Обрабатываем tool calls
             let orderedCalls = toolScheduler.order(modelOutput.toolCalls)
 
-            for call in orderedCalls {
+            for group in orderedCalls {
+            for call in group {
                 // Execute через ToolRegistry
                 let result = await toolRegistry.execute(call: call)
 
                 // Сохраняем результат в сессию
                 await session.addEvent(SessionEvent(
                     type: .toolResult,
-                    data: .json(result.toJSONString() ?? "{}"),
+                    data: .json(result.data),
                     step: step
                 ))
 
                 // Проверяем на approval required
                 if result.status == .approvalRequired {
-                    let actionText = result.data as? String ?? "неизвестное действие"
+                    let actionText = result.data.isEmpty ? "неизвестное действие" : result.data
                     let riskClass = result.toolName
                     logger.info("🔐 Требуется одобрение: \(actionText)")
                     return .approvalRequired(
@@ -288,8 +290,10 @@ public actor AgentLoop {
 
                 // Проверяем на deny
                 if result.status == .denied {
-                    logger.warning("🚫 Инструмент \(call.name) отклонён: \(result.data ?? "нет причины")")
+                    let reason = result.data.isEmpty ? "нет причины" : result.data
+                    logger.warning("🚫 Инструмент \(call.name) отклонён: \(reason)")
                 }
+            }
             }
 
             // 7. Обрабатываем plan update (если модель прислала)
@@ -375,7 +379,11 @@ public actor AgentLoop {
                 for callDict in callsArray {
                     let name = callDict["name"] as? String ?? ""
                     let args = callDict["arguments"] as? [String: Any] ?? [:]
-                    let callId = callDict["id"] as? String ?? UUID().uuidString
+                    // Безопасность (#15, ASI02 Tool Misuse): callId всегда генерим
+                    // на сервере и игнорируем callDict["id"] — модель не должна
+                    // управлять идентификатором вызова (иначе возможна подмена
+                    // callId уже одобренного действия / коллизии при idempotency).
+                    let callId = UUID()
                     toolCalls.append(ToolCallRequest(
                         id: callId,
                         name: name,
@@ -467,7 +475,7 @@ public actor AgentLoop {
             if let cp = currentCheckpoint {
                 let request = UserRequest(
                     message: "Выполни чекпоинт: «\(cp)». Общая цель: \(objective)",
-                    sessionId: await session.id
+                    sessionId: session.id
                 )
                 let result = await run(request: request, session: session)
 
@@ -527,7 +535,7 @@ public actor AgentLoop {
     /// Во время планирования:
     /// - Allowed: analyze_room_scan, search_marketplace_furniture, recommend_style, read_resource, update_plan
     /// - Blocked: generate_arrangement_plan, draft_shopping_list, confirm_purchase_order, share_project_publicly
-    public func shouldActivatePlanningMode(request: UserRequest, roomAnalysis: RoomAnalysis?) -> Bool {
+    public func shouldActivatePlanningMode(request: UserRequest, roomAnalysis: PlanningRoomAnalysis?) -> Bool {
         // Большой бюджет
         if let budgetMax = request.budgetMax, budgetMax > 500_000 {
             return true
@@ -628,11 +636,11 @@ public actor SessionCompactor {
     }
 }
 
-// MARK: - RoomAnalysis placeholder (для shouldActivatePlanningMode)
+// MARK: - PlanningRoomAnalysis placeholder (для shouldActivatePlanningMode)
 
-/// Анализ комнаты — используется в планировании (Blueprint §7).
-/// Полная версия в AnalyzeRoomScanTool.
-public struct RoomAnalysis: Sendable {
+/// Упрощённый анализ комнаты — используется в планировании (Blueprint §7).
+/// Полная версия: RoomAnalysis в AnalyzeRoomScanTool.
+public struct PlanningRoomAnalysis: Sendable {
     public let roomDimensions: RoomDimensionsAnalysis
     public let objects: [DetectedObjectAnalysis]
     public let floorAreaM2: Double
@@ -648,6 +656,8 @@ public struct RoomDimensionsAnalysis: Sendable {
     public let widthM: Double
     public let depthM: Double
     public let heightM: Double
+
+    public var floorAreaM2: Double { widthM * depthM }
 
     public init(widthM: Double, depthM: Double, heightM: Double) {
         self.widthM = widthM

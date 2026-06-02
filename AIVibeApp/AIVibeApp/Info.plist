@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- URL Cloud Function генерации изображений (L5/#22).
+	     Пусто = backend ещё не развёрнут → image-gen отключён (graceful fail),
+	     плейсхолдер-URL в бандл не попадает. Заполняется при деплое
+	     (значение/xcconfig/CI-секрет). -->
+	<key>AIVibeImageGenURL</key>
+	<string></string>
+	<!-- URL Cloud Function ai-advisor (L5/#22). Пусто = backend не развёрнут →
+	     запрос не уходит (graceful fail). Заполняется при деплое. -->
+	<key>AIVibeAIAdvisorURL</key>
+	<string></string>
+	<!-- App Token для X-App-Token (#14/#20). Пусто = заголовок не отправляется.
+	     В проде инжектится из CI-секрета / xcconfig, НЕ хранится в репозитории. -->
+	<key>AIVibeAppToken</key>
+	<string></string>
+</dict>
+</plist>

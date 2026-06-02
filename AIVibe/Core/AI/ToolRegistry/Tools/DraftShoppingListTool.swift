@@ -247,6 +247,7 @@ public struct DraftShoppingListTool: AgentTool {
     // MARK: - Execute
 
     public func execute(validated: [String: Any]) async throws -> String {
+        // swiftlint:disable:next force_cast
         let selectionsArray = validated["furniture_selection"] as! [[String: Any]]
         let budgetMaxRub = validated["budget_max_rub"] as? Int ?? 500_000
         let projectName = validated["project_name"] as? String

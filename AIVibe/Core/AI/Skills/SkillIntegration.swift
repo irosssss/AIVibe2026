@@ -14,7 +14,7 @@ import Logging
 /// 2. Инструкции скилла добавляются в контекст.
 /// 3. Все tool calls проходят через guard.
 /// 4. Результат валидируется.
-public actor SkillExecutor: Sendable {
+public actor SkillExecutor {
 
     // MARK: - Properties
 
@@ -68,7 +68,7 @@ public actor SkillExecutor: Sendable {
         var loaded: [String] = []
         for skillId in matches {
             if await skillIndex.isLoaded(skillId) { continue }
-            if let _ = await loadSkill(skillId) {
+            if await loadSkill(skillId) != nil {
                 loaded.append(skillId)
             }
         }
@@ -109,7 +109,7 @@ public actor SkillExecutor: Sendable {
             return "Нет активных скиллов"
         }
 
-        return skillStates.map { (id, state) in
+        return skillStates.map { id, state in
             "• \(id): \(state.toolCallsCount) вызовов, активен с \(state.loadedAt.formatted(.iso8601))"
         }.joined(separator: "\n")
     }
@@ -121,7 +121,7 @@ public actor SkillExecutor: Sendable {
 ///
 /// Если скилл запрещает инструмент — вызов блокируется.
 /// Если нет активных скиллов — разрешены все инструменты.
-public actor SkillToolGuard: Sendable {
+public actor SkillToolGuard {
 
     // MARK: - Properties
 
@@ -256,7 +256,7 @@ public struct SkillActionResult: Sendable, Codable {
 /// Провайдер скиллов — единая точка входа для агента.
 ///
 /// Объединяет SkillIndex, SkillExecutor и SkillToolGuard.
-public actor SkillProvider: Sendable {
+public actor SkillProvider {
 
     /// Индекс скиллов.
     public let index: SkillIndex

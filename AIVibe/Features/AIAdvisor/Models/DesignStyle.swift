@@ -4,7 +4,7 @@
 
 import Foundation
 
-enum DesignStyle: String, CaseIterable, Codable, Sendable {
+public enum DesignStyle: String, CaseIterable, Codable, Sendable {
     // Из siegblink
     case modern       = "modern"
     case vintage      = "vintage"

@@ -3,9 +3,12 @@
 build/
 DerivedData/
 *.xcuserdata
+*.xcuserdatad/
 *.xcscmblueprint
 *.xcconfig
 *.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -23,14 +26,18 @@ DerivedData/
 
 ## CocoaPods
 Pods/
-*.xcworkspace
+# Top-level .xcworkspace (CocoaPods) — этот репозиторий использует SPM, не CocoaPods.
+# Если когда-нибудь появится Podfile — добавь сюда: MyApp.xcworkspace
+# (а .xcodeproj/project.xcworkspace и .swiftpm/xcode/package.xcworkspace —
+#  это нормальные Xcode-генерируемые workspace и должны быть в репо.)
 
 ## Carthage
 Carthage/Build/
 
 ## Swift Package Manager
 .build/
-Package.resolved
+# Package.resolved НЕ игнорируем — коммитим для воспроизводимых сборок (пин версий).
+# Xcode генерирует свой в AIVibeApp/.../xcshareddata/swiftpm/Package.resolved.
 
 ## Environment files
 .env
@@ -59,3 +66,13 @@ backend/tmp/
 *.swp
 *.swo
 *~
+
+# Claude Code
+.claude/settings.local.json
+.claude/cache/
+.claude/logs/
+.claude/skills/
+
+# Codegraph (dev-инструмент навигации — локально, без коммита)
+.codegraph/
+.mcp.json

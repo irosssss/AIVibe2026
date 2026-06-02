@@ -17,7 +17,7 @@ import Logging
 /// ```
 ///
 /// Полные инструкции скилла загружаются при выборе.
-public actor SkillIndex: Sendable {
+public actor SkillIndex {
 
     // MARK: - Properties
 
@@ -140,21 +140,29 @@ public actor SkillIndex: Sendable {
 
     /// Возвращает Skills, активные для данного запроса (по trigger phrases).
     public func matchingSkills(for text: String) -> [String] {
-        skills.filter { skill in
+        let lowered = text.lowercased()
+        return skills.filter { skill in
             skill.info.triggerPhrases.contains { phrase in
-                text.lowercased().contains(phrase.lowercased())
+                Self.matchesWholeWord(phrase.lowercased(), in: lowered)
             }
         }.map { $0.id }
+    }
+
+    /// Совпадение по границам слов, а не по подстроке. Иначе короткие триггеры
+    /// («стол», «стул», «цена») ложно срабатывают внутри других слов
+    /// («столица», «стульчак», «оценка»). ICU `\b` — Unicode-aware и корректно
+    /// определяет границы кириллических слов.
+    static func matchesWholeWord(_ phrase: String, in text: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: phrase)
+        return text.range(of: "\\b\(escaped)\\b", options: .regularExpression) != nil
     }
 
     /// Автоматически загружает скиллы по триггер-фразам.
     public func autoLoad(for text: String) async -> [String] {
         let matches = matchingSkills(for: text)
         var loaded: [String] = []
-        for skillId in matches {
-            if await load(skillId) != nil {
-                loaded.append(skillId)
-            }
+        for skillId in matches where await load(skillId) != nil {
+            loaded.append(skillId)
         }
         return loaded
     }
@@ -318,7 +326,7 @@ extension AgentSkill {
 
         ### Правила
         - Учитывай размер комнаты, освещение, форму и назначение.
-        - Если комната маленькая (< 15м²) — рекомендуй светлые тона и минимализм.
+        - Если комната маленькая (< \(DesignNorms.smallRoomThresholdM2)м²) — рекомендуй светлые тона и минимализм.
         - Если комната тёмная (мало окон) — рекомендуй стили с хорошим искусственным освещением.
         - Всегда объясняй, ПОЧЕМУ ты рекомендуешь этот стиль.
         - Предлагай 2-3 альтернативных стиля на случай, если основной не понравится.
@@ -368,8 +376,8 @@ extension AgentSkill {
 
         ### Правила
         - Размеры мебели должны соответствовать размерам комнаты.
-        - Учитывай зоны открывания дверей (≥ 1м²).
-        - Минимальная ширина прохода: 70 см.
+        - Учитывай зоны открывания дверей (≥ \(Int(DesignNorms.doorClearanceM2)) м²).
+        - Минимальная ширина прохода: \(DesignNorms.minPassageCm) см.
         - Диван — вдоль длинной стены.
         - Стол — ближе к центру комнаты.
         - Стулья — по периметру.
@@ -415,14 +423,14 @@ extension AgentSkill {
         4. Вызови `draft_shopping_list` со списком выбранных товаров.
 
         ### Правила
-        - Общий бюджет включает доставку (неявно ~10%).
+        - Общий бюджет включает доставку (неявно ~\(Int(DesignNorms.deliveryShare * 100))%).
         - Приоритет: сначала крупная мебель (диван, стол), потом освещение, потом декор.
-        - Если бюджет очень маленький (< 30 000 ₽) — предложи только самое необходимое.
+        - Если бюджет очень маленький (< \(DesignNorms.lowBudgetRub) ₽) — предложи только самое необходимое.
         - Всегда проверяй наличие товара перед добавлением в список.
 
         ### Советы по экономии
         - Выбирай товары со скидкой (discountedPriceRub != nil).
-        - Рассмотри товары с более низким рейтингом (но ≥ 4.0).
+        - Рассмотри товары с более низким рейтингом (но ≥ \(String(format: "%.1f", DesignNorms.minAcceptableRating))).
         - Предложи отложить декор на потом — купи сначала необходимое.
 
         ### Запрещено
@@ -438,8 +446,8 @@ extension AgentSkill {
 public struct SkillState: Sendable, Codable {
     public let skillId: String
     public let loadedAt: Date
-    public let toolCallsCount: Int
-    public let lastUsedAt: Date?
+    public var toolCallsCount: Int
+    public var lastUsedAt: Date?
 
     public init(
         skillId: String,

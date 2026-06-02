@@ -19,7 +19,7 @@ import Logging
 /// version: pinned v3
 /// rate_limit: 100 req/min
 /// ```
-public actor WildberriesConnector: Sendable {
+public actor WildberriesConnector {
 
     // MARK: - Configuration
 
@@ -227,7 +227,7 @@ public struct WBProduct: Sendable, Codable, Identifiable {
     public let reviewCount: Int?
     public let inStock: Bool
 
-    public init(from card: WBCard) {
+    init(from card: WBCard) {
         self.id = String(card.nmID)
         self.name = card.title
         self.priceRub = card.price
@@ -369,8 +369,8 @@ public enum ConnectorError: LocalizedError, Sendable {
 
 /// Идентификатор коннектора (перечисление всех внешних систем).
 public enum ConnectorID: String, Sendable, Codable, CaseIterable {
-    case wildberries = "wildberries"
-    case ozon = "ozon"
+    case wildberries
+    case ozon
 
     /// Человекочитаемое имя.
     public var displayName: String {

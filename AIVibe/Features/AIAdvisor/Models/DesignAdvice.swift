@@ -15,9 +15,9 @@ struct DesignAdvice: Identifiable, Equatable, Codable, Sendable {
     let provider: String
 
     enum BudgetLevel: String, Equatable, Codable, Sendable {
-        case economy  = "economy"
-        case medium   = "medium"
-        case premium  = "premium"
+        case economy
+        case medium
+        case premium
 
         var displayName: String {
             switch self {
@@ -95,13 +95,13 @@ extension DesignAdvice {
         }
         let nextNumbers = (2...6).map { "\($0)." }
         guard let endIdx = nextNumbers
-            .compactMap { n in
-                lines[startIdx+1...].firstIndex(where: { $0.hasPrefix(n) })
-            }
+            .compactMap({ n in
+                lines[(startIdx + 1)...].firstIndex(where: { $0.hasPrefix(n) })
+            })
             .min() else {
-            return lines[startIdx+1...].joined(separator: "\n")
+            return lines[(startIdx + 1)...].joined(separator: "\n")
         }
-        return lines[startIdx+1..<endIdx]
+        return lines[(startIdx + 1)..<endIdx]
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

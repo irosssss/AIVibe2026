@@ -17,7 +17,7 @@ import Foundation
 /// - internalState / meta → allow
 ///
 /// Приоритет: deny > approval-gated > allow
-public actor PermissionEngine {
+public final class PermissionEngine: @unchecked Sendable {
 
     // MARK: - Custom Rules
 
@@ -60,7 +60,7 @@ public actor PermissionEngine {
 
         // 1. Кастомное правило
         if let rule = customRules[toolName] {
-            return rule.evaluate(toolName: toolName, riskClass: riskClass, arguments: arguments, context: sessionContext)
+            return rule.evaluate(toolName, riskClass, arguments, sessionContext)
         }
 
         // 2. Стандартная матрица
@@ -181,7 +181,7 @@ extension CustomPermissionRule {
 
     /// Требовать одобрения, если бюджет превышен.
     public static func approvalIfOverBudget(thresholdRub: Int) -> CustomPermissionRule {
-        CustomPermissionRule { toolName, riskClass, arguments, context in
+        CustomPermissionRule { toolName, riskClass, arguments, _ in
             // Проверяем, есть ли в аргументах поле с бюджетом
             if let totalPrice = arguments["total_price_rub"] as? Int,
                totalPrice > thresholdRub {

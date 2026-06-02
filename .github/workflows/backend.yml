@@ -9,6 +9,7 @@
 
 name: Backend CI/CD
 
+# Запускается только когда меняются файлы backend/** — чисто iOS-PR не тратят CI время.
 on:
   push:
     branches: [master, main]
@@ -23,30 +24,32 @@ on:
 
 jobs:
   syntax-and-tests:
-    name: Syntax & Tests
+    name: Node 20 — syntax + tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Syntax check (node --check)
+        # Прогоняем все .js файлы в backend, кроме node_modules.
+        # `node --check` парсит файл без выполнения — ловит синтаксические ошибки.
         run: |
-          find backend -name "*.js" -not -path "*/node_modules/*" -print0 \
-            | xargs -0 -n1 node --check
-          echo "✓ Все .js файлы синтаксически корректны"
+          find . -name "*.js" \
+            -not -path "./node_modules/*" \
+            -not -path "*/node_modules/*" \
+            -print0 | xargs -0 -n1 node --check
 
-      - name: Run tests
-        working-directory: backend
-        run: |
-          if find . -path ./node_modules -prune -o -name '*.test.js' -print | grep -q .; then
-            node --test
-          else
-            echo "Тестов пока нет — пропускаю node --test"
-          fi
+      - name: Run tests (node --test)
+        # Node 20 имеет встроенный test runner — не нужны зависимости (jest/mocha).
+        run: node --test
 
   deploy:
     name: Deploy → Yandex Cloud

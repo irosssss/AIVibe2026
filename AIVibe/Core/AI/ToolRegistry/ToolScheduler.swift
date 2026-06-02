@@ -24,6 +24,8 @@ import Logging
 public struct ToolScheduler: Sendable {
     private let logger = Logger(label: "ai.tool-scheduler")
 
+    public init() {}
+
     // MARK: - Public API
 
     /// Упорядочивает массив tool calls в оптимальном порядке выполнения.
@@ -57,7 +59,7 @@ public struct ToolScheduler: Sendable {
             "draft": 3,
             "meta": 4,
             "action": 5,
-            "financial": 6,
+            "financial": 6
         ]
 
         // Группируем по приоритетам

@@ -171,6 +171,7 @@ public struct ArrangementPlan: Sendable, Equatable, Codable {
 /// - permission: allow
 /// - timeout: 15s
 /// - max_items: 30
+// swiftlint:disable:next type_body_length
 public struct GenerateArrangementTool: AgentTool {
 
     // MARK: - AgentTool Conformance
@@ -246,7 +247,9 @@ public struct GenerateArrangementTool: AgentTool {
 
     public func execute(validated: [String: Any]) async throws -> String {
         // Парсим комнату
+        // swiftlint:disable force_cast
         let roomJSON = validated["room_analysis"] as! String
+        // swiftlint:enable force_cast
         let room: RoomAnalysis
         do {
             let data = roomJSON.data(using: .utf8)!
@@ -308,7 +311,7 @@ public struct GenerateArrangementTool: AgentTool {
                 sizeM = defaultSizeForCategory(category)
             }
 
-            var positionHint: ARPosition? = nil
+            var positionHint: ARPosition?
             if let hintDict = dict["positionHint"] as? [String: Any],
                let x = hintDict["x"] as? Float,
                let y = hintDict["y"] as? Float,
@@ -743,6 +746,7 @@ public struct GenerateArrangementTool: AgentTool {
 
     // MARK: - Collision Detection
 
+    // swiftlint:disable:next function_parameter_count
     private func rectsOverlap(
         x1: Float, z1: Float, w1: Float, d1: Float,
         x2: Float, z2: Float, w2: Float, d2: Float
@@ -907,6 +911,7 @@ public struct GenerateArrangementTool: AgentTool {
             let ww = window.size.x
             let wd = window.size.z + 0.4 // небольшая зона перед окном
 
+            // swiftlint:disable:next for_where
             for p in placements {
                 if rectsOverlap(
                     x1: p.position.x, z1: p.position.z,
