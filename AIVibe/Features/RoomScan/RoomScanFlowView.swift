@@ -48,6 +48,7 @@ struct RoomScanFlowView: View {
         AIThemeReader {
             switch store.phase {
             case .intro:          ScanIntroScreenView(store: store, onClose: onClose)
+            case .manualEntry:    ManualRoomEntryView(store: store)
             case .scanning:       ScanActiveScreenView(store: store)
             case .result:         ScanResultScreenView(store: store)
             case .styleSelection: StylePickerView(store: store)
@@ -79,6 +80,16 @@ struct ScanIntroScreenView: View {
         ("figure.walk", "Двигайтесь медленно"),
         ("viewfinder", "Захватите углы")
     ]
+
+    /// Поддерживает ли устройство AR-скан (RoomPlan/LiDAR). На устройстве без датчика
+    /// ведём пользователя по пути ручного ввода вместо немого фейла RoomPlan.
+    private var isScanSupported: Bool {
+        #if targetEnvironment(simulator)
+        true   // на симуляторе показываем демо-скан (фейк-прогресс)
+        #else
+        RoomCaptureSession.isSupported
+        #endif
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -160,21 +171,34 @@ struct ScanIntroScreenView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 10) {
-                    PrimaryButton("Начать сканирование") {
-                        Haptics.medium()
-                        store.send(.startScanTapped)
+                    if isScanSupported {
+                        PrimaryButton("Начать сканирование") {
+                            Haptics.medium()
+                            store.send(.startScanTapped)
+                        }
+                        Button {
+                            Haptics.light()
+                            store.send(.manualEntryTapped)
+                        } label: {
+                            Text("Нет LiDAR? Ввести вручную")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(c.terracotta)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        // Устройство без LiDAR — скан недоступен, ведём в ручной ввод.
+                        PrimaryButton("Ввести размеры вручную") {
+                            Haptics.medium()
+                            store.send(.manualEntryTapped)
+                        }
+                        Text("AR-сканирование недоступно на этом устройстве — нет датчика LiDAR. Введите размеры комнаты вручную.")
+                            .aiType(.caption)
+                            .foregroundStyle(c.onSurfaceMuted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
                     }
-                    Button {
-                        Haptics.light()
-                        store.send(.manualEntryTapped)
-                    } label: {
-                        Text("Нет LiDAR? Ввести вручную")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(c.terracotta)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)

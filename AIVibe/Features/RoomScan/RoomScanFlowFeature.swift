@@ -38,6 +38,7 @@ public struct RoomMetrics: Equatable, Sendable {
 
 public enum RoomScanFlowPhase: Equatable, Sendable {
     case intro
+    case manualEntry
     case scanning
     case result
     case styleSelection
@@ -62,6 +63,8 @@ public struct RoomScanFlowFeature: Sendable {
         public var isGeneratingDesign: Bool = false
         public var designPlan: RoomDesignPlan?
         public var designError: String?
+        /// Ошибка валидации ручного ввода размеров (путь без LiDAR).
+        public var manualEntryError: String?
 
         public init(
             phase: RoomScanFlowPhase = .intro,
@@ -80,6 +83,8 @@ public struct RoomScanFlowFeature: Sendable {
         case scanFailed(String)
         case closeTapped
         case manualEntryTapped
+        case manualDimensionsSubmitted(widthM: Double, depthM: Double, heightM: Double)
+        case backFromManualEntryTapped
         case rescanTapped
         case continueTapped
         case backFromResultTapped
@@ -190,8 +195,31 @@ public struct RoomScanFlowFeature: Sendable {
                 state.phase = .result
                 return .none
 
+            case .manualEntryTapped:
+                state.manualEntryError = nil
+                state.phase = .manualEntry
+                return .none
+
+            case let .manualDimensionsSubmitted(width, depth, height):
+                do {
+                    let geometry = try RoomGeometry.manualRectangular(
+                        widthM: width, depthM: depth, heightM: height
+                    )
+                    state.manualEntryError = nil
+                    state.phase = .styleSelection
+                    // Переиспользуем путь LiDAR-скана: .geometryExtracted выставит geometry + metrics.
+                    return .send(.geometryExtracted(geometry))
+                } catch {
+                    state.manualEntryError = error.localizedDescription
+                    return .none
+                }
+
+            case .backFromManualEntryTapped:
+                state.manualEntryError = nil
+                state.phase = .intro
+                return .none
+
             case .closeTapped,
-                 .manualEntryTapped,
                  .continueTapped,
                  .editObjectTapped:
                 return .none

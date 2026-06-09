@@ -103,10 +103,10 @@
 | # | Задача | Зависит | Трудозатраты | 🔒 |
 |---|--------|---------|------|----|
 | **A1. Путь без LiDAR** [разрыв №1] | | | | |
-| A1.1 | Экран ручного ввода габаритов (ширина/глубина/высота + опц. двери/окна), валидация ≥4 м² (как `RoomGeometryError.roomTooSmall`), предпросмотр | — | M | |
-| A1.2 | Новая фаза `RoomScanFlowPhase.manualEntry` + обработка `.manualEntryTapped` → форма; `.manualGeometryEntered(RoomGeometry)` → тот же путь `styleSelection → generating` (через публичный `RoomGeometry.init`) | A1.1 | S | |
-| A1.3 | Рантайм-детекция LiDAR (через `supportsSceneReconstruction`/модель устройства) + graceful-деградация: на устройстве без датчика вести в ручной ввод, не запускать молча RoomPlan | — | S | |
-| A1.4 | Тесты пути `intro → manualEntry → geometry → styleSelection` + прогон на реальном non-LiDAR устройстве | A1.1–3 | S | |
+| A1.1 | ✅ **Сделано** — экран `ManualRoomEntryView` (ширина/глубина/высота, валидация диапазонов + ≥4 м², предпросмотр площади) | — | M | |
+| A1.2 | ✅ **Сделано** — фаза `RoomScanFlowPhase.manualEntry` + действия `.manualDimensionsSubmitted`/`.backFromManualEntryTapped`; построитель `RoomGeometry.manualRectangular(...)`; переиспользует `.geometryExtracted` → `styleSelection` | A1.1 | S | |
+| A1.3 | ✅ **Сделано** — рантайм-детекция `RoomCaptureSession.isSupported` + адаптивный intro: без LiDAR primary-кнопка ведёт в ручной ввод (⚠️ полная проверка — только на реальном non-LiDAR устройстве; симулятор форсит `true`) | — | S | |
+| A1.4 | ✅ **Сделано** — `ManualRoomEntryTests` (7 тестов: построитель + поток редьюсера), все зелёные; ⏳ ручной прогон на реальном устройстве без LiDAR | A1.1–3 | S | |
 | **A2. Движок на AR-путь** [честная скорость] | | | | |
 | A2.1 | Переключить `AgentOrchestrator`/ARDesigner: LLM возвращает **только список мебели + стиль**, координаты считает `GenerateArrangementTool`/`CollisionDetector` (миллисекунды). Адаптер `RoomGeometry → выбор мебели → ArrangementPlan → RoomDesignPlan` | — | L | |
 | A2.2 | Переписать `PromptBuilder.systemPrompt`: убрать требование `position/rotation`, перенести retry с перепромпта LLM на детерминированную переукладку; `DesignResponseParser` — `position` опционально | A2.1 | S | |
