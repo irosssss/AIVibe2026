@@ -113,9 +113,9 @@
 | A2.3 | Latency-бенч (мок-LLM): зафиксировать реальное время до/после, чтобы заявления о скорости были подтверждены | A2.1 | M | |
 | A2.4 | **Отложено** (решение владельца): стриминг текста-объяснения (SSE/chunked + `AsyncStream`). Сцену ускоряет движок (A2.1) и без него; затрагивает ядро → отдельным этапом после Фаз 1–3 | — | L | 🔒 |
 | **A3. Подписка PRO** [доход №1] | | | | |
-| A3.1 | Backend ЮKassa: новая Cloud Function `functions/payments` + `shared/yookassa.js`, приём платёжного вебхука (проверка подписи, идемпотентность), статус подписки в YDB по `userId` | — | L | |
-| A3.2 | iOS: модель тарифа `enum FREE/PRO/BUSINESS`, хранение/синхронизация статуса с backend, отображение в UI | A3.1 | M | |
-| A3.3 | iOS: пейволл-экран (TCA) + гейтинг фич — **оживить** `SessionContext.hasSubscription`, лимиты FREE (напр. N сканов/AI-запросов), показ пейволла при превышении | A3.2 | M | |
+| A3.1 | 🔧 **Код написан, ждёт прогона тестов** — `shared/yookassa.js` (no-deps fetch-клиент) + `functions/payments` (create/status/вебхук с перепроверкой статуса по API ЮKassa + идемпотентность по paymentId, таблицы YDB `subscriptions`/`payments_processed`) + 18 тестов + деплой-контур (deploy.sh, api-gateway.yaml). ⏳ Реальные ключи ЮKassa — в Lockbox (`YOOKASSA_SHOP_ID`/`YOOKASSA_SECRET_KEY`), нужен аккаунт | — | L | |
+| A3.2 | 🔧 **Код написан, ждёт прогона тестов** — `SubscriptionTier` (free/pro/business, цены-канон), `SubscriptionStatus.fromBackend` (+`effectiveTier` для гейтинга), `SubscriptionClient` (TCA-зависимость: статус с backend → кеш → free; Info.plist-ключи `AIVibePaymentsURL`/`AIVibeAppToken`) | A3.1 | M | |
+| A3.3 | 🔧 **Код написан, ждёт прогона тестов** — `ScanQuota` (FREE: 3 скана/мес, сброс по месяцу), `PaywallFeature`+`PaywallScreen` (якорение цен, «Обновить статус», без внешних ссылок — anti-steering), гейт в `RoomScanFlowFeature.startScanTapped` → пейволл при исчерпании | A3.2 | M | |
 
 **⚠️ Apple (Guideline 3.1.1, anti-steering):** подписку продавать **на сайте** через ЮKassa; в приложении показывать ценность, не вести «в лоб» на внешнюю оплату цифровой подписки.
 
@@ -240,3 +240,36 @@
 ---
 
 > Этот план — каркас на основе аудита кода и двух стратегических доков. Статусы и оценки обновляйте по мере реализации. Источник истины по нормам — `DesignNorms.swift`; по ценам — `STRATEGY.md §1.3` / `BUSINESS_MODEL.md §4`.
+
+---
+
+## 9. Контрольная точка сессии (2026-06-10) — для продолжения работы
+
+**Где работаем:** worktree `.claude/worktrees/happy-murdock-8c8aae`, ветка `claude/happy-murdock-8c8aae` (запушена на origin).
+
+**Бэкап:** тег `v1-pre-upgrade` + ветка `archive/v1-pre-upgrade` = коммит `de7d957`, запушены на GitHub. Откат: `git checkout v1-pre-upgrade`.
+
+**Закоммичено и проверено (✅):**
+- `bf60c36` — план + BUSINESS_MODEL.md + UX_GROWTH.md
+- `f6e5da8` — Фаза 0: README/STRATEGY выровнены под реальность
+- `2b7afd7` — A1: путь без LiDAR (78/78 тестов, SwiftLint чисто, сборка зелёная)
+
+**Написано, НО НЕ закоммичено и НЕ проверено (🔧 блок A3)** — Bash был недоступен (сбой сервиса проверки команд Claude Code).
+
+**Продолжение 2026-06-10 (вторая сессия):** статическое ревью A3 пройдено полностью (все сигнатуры/зависимости сходятся: `StorageClientProtocol`, `NetworkClient.post`, `AnonymousUserID`, `InMemoryStorageClient`; pbxproj на синхронизируемых группах — новые файлы подхватятся). Найдена и закрыта **дыра монетизации**: путь ручного ввода (A1, основной для устройств без LiDAR) обходил квоту — добавлен гейт в `manualEntryTapped` (проверка без списания) и `manualDimensionsSubmitted` (проверка + списание при успешном вводе), хелперы `quotaAllowsScan`/`consumeScanQuota`; +4 теста в `ScanQuotaPaywallTests`. Сбой классификатора Bash продолжался — динамическая верификация всё ещё не выполнена:
+- backend: `shared/yookassa.js`, `functions/payments/index.js` + `package.json`, `__tests__/payments.test.js`, правки `deploy.sh` (секреты YOOKASSA_*, 5-я функция) и `api-gateway.yaml` (роуты `/payments`, `/payments/webhook`)
+- iOS: `Core/Subscription/SubscriptionModels.swift`, `SubscriptionClient.swift`, `ScanQuota.swift`; `Features/Paywall/PaywallFeature.swift`, `PaywallView.swift`; правки `Features/RoomScan/RoomScanFlowFeature.swift` (гейт квоты в `.startScanTapped`, действия `flowAppeared`/`subscriptionStatusLoaded`/`paywallDismissed`) и `RoomScanFlowView.swift` (onAppear + sheet пейволла)
+- тесты: `AIVibeTests/Features/SubscriptionModelsTests.swift`, `ScanQuotaPaywallTests.swift`
+
+**ПЕРВОЕ действие при продолжении — верификация A3 (по порядку, чинить до зелёного):**
+1. `cd backend && node --check shared/yookassa.js && node --check functions/payments/index.js && bash -n deploy.sh && node --test`
+2. `xcodebuild build -scheme AIVibe -destination "platform=iOS Simulator,name=iPhone 17,OS=26.0" -configuration Debug` (⚠️ на этой машине симулятор OS=26.0, не 26.3.1 из CLAUDE.md)
+3. `xcodebuild test` (полный сьют; до A3 было 78 тестов)
+4. `swiftlint --strict` на изменённых/новых swift-файлах (включено правило force_unwrapping)
+5. Коммит A3 + push
+
+**После A3 по плану:** Фаза 2 (каталог/партнёры; первые кандидаты без устройства — B5/B6, backend). A2 **отложен до сессии с устройством** (решение владельца, см. §8 и коммит `ab5d3a2`) — прежняя строка «после A3 — A2» устарела.
+
+**Решения владельца (зафиксированы):** стриминг — отложить; гибрид Lite+Pro — Фаза 2; способ CPA — решить на старте Фазы 3; оцифровка первым фабрикам — бесплатно; визуальный редизайн — после функций. Режим работы: «делай все поэтапно, я тебе доверяю» — действовать самостоятельно, останавливаться только на правках защищённого ядра, бизнес-выборах и внешних аккаунтах (ЮKassa, партнёры).
+
+**Известное (не моё, было до):** deprecation warning `debounce` в `ARDesignerFeature.swift:194`.

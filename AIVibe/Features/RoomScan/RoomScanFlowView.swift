@@ -46,20 +46,34 @@ struct RoomScanFlowView: View {
 
     var body: some View {
         AIThemeReader {
-            switch store.phase {
-            case .intro:          ScanIntroScreenView(store: store, onClose: onClose)
-            case .manualEntry:    ManualRoomEntryView(store: store)
-            case .scanning:       ScanActiveScreenView(store: store)
-            case .result:         ScanResultScreenView(store: store)
-            case .styleSelection: StylePickerView(store: store)
-            case .generating:     DesignGeneratingView(store: store)
-            case .designComplete:
-                DesignCompleteView(store: store) {
-                    if let plan = store.designPlan, let geo = store.geometry {
-                        onContinueWithDesign(plan, geo)
-                    } else {
-                        onContinueWithResult()
+            Group {
+                switch store.phase {
+                case .intro:          ScanIntroScreenView(store: store, onClose: onClose)
+                case .manualEntry:    ManualRoomEntryView(store: store)
+                case .scanning:       ScanActiveScreenView(store: store)
+                case .result:         ScanResultScreenView(store: store)
+                case .styleSelection: StylePickerView(store: store)
+                case .generating:     DesignGeneratingView(store: store)
+                case .designComplete:
+                    DesignCompleteView(store: store) {
+                        if let plan = store.designPlan, let geo = store.geometry {
+                            onContinueWithDesign(plan, geo)
+                        } else {
+                            onContinueWithResult()
+                        }
                     }
+                }
+            }
+            .onAppear { store.send(.flowAppeared) }
+            // Пейволл при исчерпании квоты сканов FREE (A3.3).
+            .sheet(isPresented: Binding(
+                get: { store.paywallTrigger != nil },
+                set: { isPresented in
+                    if !isPresented { store.send(.paywallDismissed) }
+                }
+            )) {
+                PaywallScreen(trigger: store.paywallTrigger ?? .scanLimit) {
+                    store.send(.paywallDismissed)
                 }
             }
         }

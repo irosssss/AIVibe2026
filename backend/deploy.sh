@@ -51,6 +51,8 @@ SECRET_KEYS=(
   YDB_DOCUMENT_API_ENDPOINT
   YDB_DATABASE
   NODE_TLS_REJECT_UNAUTHORIZED
+  YOOKASSA_SHOP_ID
+  YOOKASSA_SECRET_KEY
 )
 SECRET_FLAGS=()
 for key in "${SECRET_KEYS[@]}"; do
@@ -124,10 +126,19 @@ cp "$BACKEND/functions/image-gen/package.json"     "$S/package.json"
 cp -R "$BACKEND/shared"                             "$S/shared"
 deploy "aivibe-image-gen" "index.handler" "256m" "60s" "$S"
 
+# ─── 5. aivibe-payments ──────────────────────────────────────────
+# Подписка PRO/BUSINESS через ЮKassa (Фаза 1, A3.1 — docs/UPGRADE_PLAN.md).
+S="$BUILD_DIR/payments"
+mkdir -p "$S"
+stage_subfunction "$BACKEND/functions/payments/index.js" "$S/index.js"
+cp "$BACKEND/functions/payments/package.json"      "$S/package.json"
+cp -R "$BACKEND/shared"                             "$S/shared"
+deploy "aivibe-payments" "index.handler" "256m" "30s" "$S"
+
 # ─── Итог ────────────────────────────────────────────────────────
 echo ""
-echo "✅ Все 4 функции задеплоены. URL функций:"
-for name in aivibe-ai-advisor aivibe-marketplace aivibe-rag-indexer aivibe-image-gen; do
+echo "✅ Все 5 функций задеплоены. URL функций:"
+for name in aivibe-ai-advisor aivibe-marketplace aivibe-rag-indexer aivibe-image-gen aivibe-payments; do
   url=$(yc serverless function get "$name" --folder-id "$YC_FOLDER_ID" --format json 2>/dev/null \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('http_invoke_url','(нет)'))" 2>/dev/null || echo "(нет)")
   printf "  %-22s %s\n" "$name" "$url"
