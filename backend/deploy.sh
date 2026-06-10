@@ -71,10 +71,12 @@ deploy() {
   if ! yc serverless function get "$name" --folder-id "$YC_FOLDER_ID" >/dev/null 2>&1; then
     echo "  функция $name не найдена — создаю"
     yc serverless function create --name "$name" --folder-id "$YC_FOLDER_ID" >/dev/null
-    # Публичный вызов по HTTP: авторизация — APP_TOKEN внутри самой функции
-    # (health и вебхук ЮKassa токена не требуют by design).
-    yc serverless function allow-unauthenticated-invoke "$name" --folder-id "$YC_FOLDER_ID" >/dev/null
   fi
+  # Публичный вызов по HTTP — идемпотентно при каждом деплое, а не только при
+  # создании (иначе сбой между create и allow оставит функцию приватной навсегда).
+  # Авторизация — APP_TOKEN внутри самой функции (health и вебхук ЮKassa
+  # токена не требуют by design). Требует роли serverless.functions.admin у SA.
+  yc serverless function allow-unauthenticated-invoke "$name" --folder-id "$YC_FOLDER_ID" >/dev/null
 
   ( cd "$srcdir" && zip -qr "$BUILD_DIR/$name.zip" . )
 
