@@ -56,11 +56,12 @@ struct AIAdvisorChatView: View {
                 } else {
                     activeContent
                 }
-
-                VStack {
-                    ChatTopBar(skill: currentSkill, thinking: isThinking)
-                    Spacer()
-                }
+            }
+            // Шапка как top-inset, а не оверлей поверх контента: контент
+            // больше не подгоняется «на глаз» жёсткими отступами и не
+            // наезжает на шапку.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                ChatTopBar(skill: currentSkill, thinking: isThinking)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Composer(
@@ -115,6 +116,11 @@ struct AIAdvisorChatView: View {
     /// Запускает стриминг для последнего AI-сообщения, если оно новое.
     private func startStreamingIfNeeded(count: Int) {
         guard count > 0 else { return }
+        // Стримим только живой ответ (phase == .result после chatResponseReceived /
+        // aiResponseReceived). История, восстановленная при открытии экрана
+        // (phase == .idle), показывается сразу — иначе последний ответ AI
+        // «перепечатывался» заново при каждом запуске.
+        guard store.phase == .result else { return }
         let last = store.chatMessages[count - 1]
         guard !last.isUser else { return }
         streamingMessageId = last.id
@@ -218,9 +224,10 @@ struct AIAdvisorChatView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 110)   // под top bar
+            .padding(.top, 24)
             .padding(.bottom, 32)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Active (state 2 + 3)
@@ -283,9 +290,10 @@ struct AIAdvisorChatView: View {
 
                     Color.clear.frame(height: 12).id("bottom")
                 }
-                .padding(.top, 130)   // под top bar (54 status + ~76 chrome)
-                .padding(.bottom, budget == nil ? 16 : 80)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: store.chatMessages.count) { _, _ in
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }

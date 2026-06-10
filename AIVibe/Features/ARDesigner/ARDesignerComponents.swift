@@ -266,46 +266,19 @@ struct ARFurnitureSheet: View {
         .frame(height: 220)
     }
 
+    /// Сколько строк помещается без скролла; больше — список скроллится,
+    /// чтобы развёрнутая шторка не вылезала за экран и не наезжала на топ-бар.
+    private static let expandedRowsWithoutScroll = 4
+
     private var expandedList: some View {
         VStack(spacing: 8) {
-            ForEach(items) { item in
-                let isSelected = item.id == selectedID
-                HStack(spacing: 12) {
-                    PhotoSlot(
-                        tone: furnitureTone(for: item.itemType),
-                        cornerRadius: 10,
-                        aspectRatio: 1
-                    )
-                    .frame(width: 56, height: 56)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(furnitureSubtitle(item))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text(furnitureDisplayTitle(item))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                        if let price = prices[item.id] {
-                            Text(aiFmtRub(price))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Button { onRemove(item.id) } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                    .buttonStyle(.plain)
+            if items.count > Self.expandedRowsWithoutScroll {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 8) { expandedRows }
                 }
-                .padding(10)
-                .background(
-                    Color.white.opacity(isSelected ? 0.12 : 0.06),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .onTapGesture { onSelect(item.id) }
+                .frame(height: 312)
+            } else {
+                expandedRows
             }
 
             if total > 0 {
@@ -363,6 +336,48 @@ struct ARFurnitureSheet: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
+    }
+
+    private var expandedRows: some View {
+        ForEach(items) { item in
+            let isSelected = item.id == selectedID
+            HStack(spacing: 12) {
+                PhotoSlot(
+                    tone: furnitureTone(for: item.itemType),
+                    cornerRadius: 10,
+                    aspectRatio: 1
+                )
+                .frame(width: 56, height: 56)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(furnitureSubtitle(item))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text(furnitureDisplayTitle(item))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                    if let price = prices[item.id] {
+                        Text(aiFmtRub(price))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button { onRemove(item.id) } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(10)
+            .background(
+                Color.white.opacity(isSelected ? 0.12 : 0.06),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .onTapGesture { onSelect(item.id) }
+        }
     }
 }
 

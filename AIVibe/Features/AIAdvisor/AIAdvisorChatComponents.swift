@@ -15,13 +15,13 @@ struct ChatTopBar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {} label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(c.terracotta)
-                }
-                .buttonStyle(.plain)
-                .frame(width: 40, alignment: .leading)
+                // Чат — корневой таб, «назад» некуда. Декоративная иконка
+                // вместо кнопки-пустышки (тап по ней выглядел как зависание).
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(c.terracotta)
+                    .frame(width: 40, alignment: .leading)
+                    .accessibilityHidden(true)
 
                 Spacer()
 

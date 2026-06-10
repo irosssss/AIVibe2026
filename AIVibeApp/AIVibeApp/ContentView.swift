@@ -102,8 +102,14 @@ struct ContentView: View {
                         if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
                             ARDesignerScreen(
                                 designPlan: plan,
-                                roomGeometry: geo
+                                roomGeometry: geo,
+                                // Крестик на корневом AR-табе: уходим на главную
+                                // (раньше тап не делал ничего).
+                                onClose: { selectedTab = .home }
                             )
+                            // Store создаётся один раз на identity вью —
+                            // новый план должен пересоздать экран.
+                            .id(plan.id)
                         } else {
                             ARDesignerEmptyState {
                                 selectedTab = .scan
@@ -193,6 +199,9 @@ struct ContentView: View {
                         roomGeometry: geo,
                         onClose: { pop(path) }
                     )
+                    // Store создаётся один раз на identity вью —
+                    // новый план должен пересоздать экран.
+                    .id(plan.id)
                 } else {
                     ARDesignerEmptyState {
                         pop(path)
