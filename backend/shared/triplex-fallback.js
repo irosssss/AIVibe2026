@@ -78,10 +78,11 @@ export function cacheSize() {
  * @param {string} options.prompt — текстовый промпт
  * @param {string} [options.imageBase64] — base64 изображения (для vision)
  * @param {number} [options.timeoutMs=25000] — таймаут на попытку (мс)
+ * @param {'pro'|'lite'} [options.model='pro'] — модель YandexGPT (B7, решение роутера)
  * @param {function} [options.log] — логгер: (level, msg, extra?) => void
- * @returns {Promise<{ text: string, provider: string, latencyMs: number, circuitSkipped: string|null, errorLog: Array<{provider: string, error: string}> }>}
+ * @returns {Promise<{ text: string, provider: string, model: string|null, usage: object|null, latencyMs: number, circuitSkipped: string|null, errorLog: Array<{provider: string, error: string}> }>}
  */
-export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, log }) {
+export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, model = 'pro', log }) {
     const logFn = log || (() => {});
     const startTime = Date.now();
 
@@ -89,6 +90,10 @@ export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, 
     let text = null;
     /** @type {string} */
     let provider = 'unavailable';
+    /** @type {string|null} — фактическая модель (B7.3: для замера цены запроса) */
+    let modelUsed = null;
+    /** @type {object|null} — usage провайдера (prompt/completion tokens) */
+    let usage = null;
     /** @type {string|null} */
     let circuitSkipped = null;
     /** @type {Array<{provider: string, error: string}>} */
@@ -99,11 +104,13 @@ export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, 
     if (yandexCB.allowed) {
         try {
             const yandexStart = Date.now();
-            const result = await callYandexGPT({ prompt, imageBase64, timeoutMs });
+            const result = await callYandexGPT({ prompt, imageBase64, timeoutMs, model });
             text = result.text;
             provider = 'yandexgpt';
+            modelUsed = result.model;
+            usage = result.usage || null;
             circuitBreaker.success('yandexgpt');
-            logFn('info', 'YandexGPT success', { latencyMs: Date.now() - yandexStart });
+            logFn('info', 'YandexGPT success', { latencyMs: Date.now() - yandexStart, model: modelUsed, usage });
         } catch (err) {
             circuitBreaker.failure('yandexgpt', err);
             const msg = String(err.message).slice(0, 120);
@@ -126,8 +133,10 @@ export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, 
                 const result = await callGigaChat({ prompt, timeoutMs });
                 text = result.text;
                 provider = 'gigachat';
+                modelUsed = 'GigaChat-Max'; // фиксированная модель клиента gigachat.js
+                usage = result.usage || null;
                 circuitBreaker.success('gigachat');
-                logFn('info', 'GigaChat success', { latencyMs: Date.now() - gigaStart });
+                logFn('info', 'GigaChat success', { latencyMs: Date.now() - gigaStart, model: modelUsed, usage });
             } catch (err) {
                 circuitBreaker.failure('gigachat', err);
                 const msg = String(err.message).slice(0, 120);
@@ -167,6 +176,8 @@ export async function triplexFallback({ prompt, imageBase64, timeoutMs = 25000, 
     return {
         text,
         provider,
+        model: modelUsed,
+        usage,
         latencyMs: Date.now() - startTime,
         circuitSkipped: circuitSkipped || null,
         errorLog

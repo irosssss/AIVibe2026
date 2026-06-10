@@ -55,15 +55,23 @@ export async function getIamToken() {
     }
 }
 
+// B7.2: гибрид Lite+Pro. Решение, какую модель брать, принимает роутер
+// (shared/model-router.js) — здесь только маппинг на имя модели Яндекса.
+const GPT_MODELS = {
+    pro: 'yandexgpt-5',
+    lite: 'yandexgpt-lite',
+};
+
 /**
  * Вызвать YandexGPT с triplex fallback-совместимым форматом
  * @param {object} options
  * @param {string} options.prompt — текстовый промпт
  * @param {string} [options.imageBase64] — base64 изображения (для vision)
  * @param {number} [options.timeoutMs=25000] — таймаут (мс)
- * @returns {Promise<{text: string, usage: object}>}
+ * @param {'pro'|'lite'} [options.model='pro'] — выбор модели (B7, роутер)
+ * @returns {Promise<{text: string, provider: string, model: string, usage: object}>}
  */
-export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) {
+export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000, model = 'pro' }) {
     const secrets = await getSecrets();
     const folderId = secrets.YANDEXGPT_FOLDER_ID;
     const iamToken = await getIamToken();
@@ -78,8 +86,9 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) 
         ];
     }
 
+    const modelName = GPT_MODELS[model] || GPT_MODELS.pro;
     const body = {
-        modelUri: `gpt://${folderId}/yandexgpt-5/latest`,
+        modelUri: `gpt://${folderId}/${modelName}/latest`,
         completionOptions: {
             stream: false,
             temperature: 0.7,
@@ -117,6 +126,7 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) 
         return {
             text,
             provider: 'yandexgpt',
+            model: modelName,
             usage: data.result?.usage || {}
         };
     } finally {

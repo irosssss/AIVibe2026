@@ -8,6 +8,7 @@ import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
 import { triplexFallback, circuitStatus, circuitReset, clearCache, cacheSize } from './shared/triplex-fallback.js';
 import { enrichPromptWithRAG } from './shared/rag-search.js';
+import { selectModel } from './shared/model-router.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -214,10 +215,15 @@ export const handler = async (event, context) => {
         log('info', 'RAG context attached', { ragChunks: enriched.ragChunks });
     }
 
+    // ── 4.8 Роутер модели Lite/Pro (B7) — по ИСХОДНОМУ промпту ──
+    const route = selectModel(prompt, { hasImage: Boolean(imageBase64) });
+    log('info', 'Model routed', { model: route.model, reason: route.reason });
+
     // ── 5. Triplex Fallback (YandexGPT → GigaChat → Cache) ────
     // Использует единую реализацию из shared/triplex-fallback.js
     const triplexResult = await triplexFallback({
         prompt: enriched.prompt,
+        model: route.model,
         imageBase64,
         timeoutMs: 25000,
         log: (level, msg, extra) => {
@@ -233,12 +239,15 @@ export const handler = async (event, context) => {
         _l: 'info', _rid: requestId.slice(0, 8), _t: totalLatency,
         msg: 'Response sent',
         provider: triplexResult.provider,
+        model: triplexResult.model,
+        usage: triplexResult.usage,
         rateLimitRemaining: rateInfo.remaining,
     }).slice(0, 500));
 
     return jsonResponse(200, {
         text: triplexResult.text,
         provider: triplexResult.provider,
+        model: triplexResult.model || undefined,
         latencyMs: totalLatency,
         requestId,
         circuitBreaker: triplexResult.circuitSkipped ? { skipped: triplexResult.circuitSkipped } : undefined,
