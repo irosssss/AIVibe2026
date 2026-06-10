@@ -76,14 +76,15 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000, mo
     const folderId = secrets.YANDEXGPT_FOLDER_ID;
     const iamToken = await getIamToken();
 
-    const messages = [{ role: 'user', content: prompt }];
+    // Родной API Яндекса ждёт поле text, не content (OpenAI-стиль давал
+    // HTTP 400 «Error in session» — проверено живым вызовом при первом деплое).
+    const messages = [{ role: 'user', text: prompt }];
 
-    // Если есть изображение — добавляем как multimodal контент
+    // Изображение: native completion API картинки не принимает — описываем факт
+    // наличия в тексте, чтобы запрос не падал. Полноценный vision —
+    // отдельной задачей (OpenAI-совместимый эндпоинт или VLM API).
     if (imageBase64) {
-        messages[0].content = [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
-        ];
+        messages[0].text = `${prompt}\n\n[К запросу приложено фото комнаты — анализ изображения временно недоступен, отвечай по тексту.]`;
     }
 
     const modelName = GPT_MODELS[model] || GPT_MODELS.pro;
