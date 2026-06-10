@@ -119,16 +119,14 @@ stage_subfunction() {
 }
 
 # ─── 2. aivibe-marketplace ───────────────────────────────────────
-# Фичефлаг B2: CATALOG_SOURCE=partner → партнёрский каталог YDB,
-# иначе Apify (дефолт). Переключение: CATALOG_SOURCE=partner bash backend/deploy.sh
+# Пивот 2026-06: фичефлаг CATALOG_SOURCE удалён — источник товаров
+# один, партнёрский каталог YDB (Apify-путь WB/Ozon выпилен из кода).
 S="$BUILD_DIR/marketplace"
 mkdir -p "$S"
 stage_subfunction "$BACKEND/functions/marketplace/index.js" "$S/index.js"
 cp "$BACKEND/functions/marketplace/package.json"   "$S/package.json"
 cp -R "$BACKEND/shared"                             "$S/shared"
-EXTRA_FLAGS=(--environment "CATALOG_SOURCE=${CATALOG_SOURCE:-apify}")
 deploy "aivibe-marketplace" "index.handler" "512m" "60s" "$S"
-EXTRA_FLAGS=()
 
 # ─── 3. aivibe-rag-indexer ───────────────────────────────────────
 S="$BUILD_DIR/rag-indexer"

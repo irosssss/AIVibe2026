@@ -1,6 +1,6 @@
 # Code Complexity Report
 
-Generated: 2026-06-10T07:24:25.599Z
+Generated: 2026-06-10T14:40:14.515Z
 Script: `scripts/code-complexity-analyzer.mjs`
 
 ## Сводка

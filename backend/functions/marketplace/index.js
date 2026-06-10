@@ -1,17 +1,18 @@
 // backend/functions/marketplace/index.js
-// Yandex Cloud Function — поиск товаров: партнёрский каталог (B2) или Apify,
+// Yandex Cloud Function — поиск товаров в партнёрском каталоге (B2)
 // плюс резолвер артикулов (B3).
+//
+// Пивот 2026-06 (docs/BUSINESS_MODEL.md): маркетплейсы Ozon/Wildberries убраны,
+// единственный источник товаров — каталог фабрик-партнёров в YDB.
 //
 // Security pipeline (CLAUDE.md требование, аналог backend/index.js):
 //   1. APP_TOKEN header check
 //   2. Input validation (length, regex)
 //   3. Rate limit per IP + per userId
 //   4. promptGuard на user-supplied query (попадает в YandexGPT prompt)
-//   5. Источник по фичефлагу CATALOG_SOURCE: 'partner' → каталог YDB (B2),
-//      иначе параллельный поиск Wildberries + Ozon (Apify). Затем YandexGPT enrich.
+//   5. Поиск по каталогу YDB (B2), затем YandexGPT enrich.
 //   Отдельное действие body.action='resolve' (B3): артикул → usdz_url/цена.
 
-import { runActor } from '../../shared/apify-client.js';
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
@@ -34,14 +35,7 @@ const ALLOWED_STYLES = new Set([
   'современный', // legacy fallback в текущем коде
 ]);
 
-// ВАЖНО: ID акторов нужно подтвердить на apify.com/store перед продакшеном.
-// Поля в выдаче актора тоже стоит сверить во время smoke-теста (см. normalize*).
-const WILDBERRIES_ACTOR = 'epctex/wildberries-scraper';
-const OZON_ACTOR = 'epctex/ozon-scraper';
-
-const MAX_ITEMS_PER_SOURCE = 8;
 const MAX_RESULTS = 10;
-const ACTOR_OPTIONS = { timeoutSecs: 40, memoryMbytes: 512 };
 
 const rateLimitStore = new Map();
 
@@ -154,36 +148,15 @@ export const handler = async (event, context) => {
       return buildResponse(400, { error: 'Content policy violation' });
     }
 
-    // 7. Источник товаров — фичефлаг CATALOG_SOURCE (B2):
-    //    'partner' → каталог YDB; иначе Apify (фолбэк на cold start).
+    // 7. Источник товаров — партнёрский каталог YDB (B2).
     await getSecrets();
 
-    let products;
-    let marketplace_sources;
-
-    if (process.env.CATALOG_SOURCE === 'partner') {
-      products = await searchPartnerCatalog({
-        query,
-        style: explicitStyle,
-        topK: MAX_RESULTS,
-      });
-      marketplace_sources = { partner: products.length };
-    } else {
-      const actorInput = { search: query, maxItems: MAX_ITEMS_PER_SOURCE, proxy: { useApifyProxy: true } };
-
-      // Один упавший актор не валит весь запрос.
-      const [wbResult, ozonResult] = await Promise.allSettled([
-        runActor(WILDBERRIES_ACTOR, actorInput, ACTOR_OPTIONS),
-        runActor(OZON_ACTOR, actorInput, ACTOR_OPTIONS),
-      ]);
-
-      const wbItems = settledItems(wbResult, 'wildberries');
-      const ozonItems = settledItems(ozonResult, 'ozon');
-
-      // Нормализация к общему формату.
-      products = [...normalizeWildberries(wbItems), ...normalizeOzon(ozonItems)];
-      marketplace_sources = { wildberries: wbItems.length, ozon: ozonItems.length };
-    }
+    let products = await searchPartnerCatalog({
+      query,
+      style: explicitStyle,
+      topK: MAX_RESULTS,
+    });
+    const marketplace_sources = { partner: products.length };
 
     // Фильтр по бюджету (safeBudget уже провалидирован выше).
     if (safeBudget) {
@@ -223,76 +196,6 @@ export const handler = async (event, context) => {
     return buildResponse(500, { error: 'internal_error', requestId });
   }
 };
-
-// ─── Результаты Promise.allSettled ───────────────────────────────
-
-function settledItems(result, label) {
-  if (result.status === 'fulfilled' && Array.isArray(result.value)) {
-    return result.value;
-  }
-  if (result.status === 'rejected') {
-    console.warn(`[marketplace] ${label} actor failed:`, result.reason?.message ?? result.reason);
-  }
-  return [];
-}
-
-// ─── Нормализация ────────────────────────────────────────────────
-// Поля акторов могут отличаться — берём первое подходящее имя поля.
-
-function pickFirst(obj, keys) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null && v !== '') return v;
-  }
-  return undefined;
-}
-
-function normalizePrice(raw) {
-  if (raw == null) return null;
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-  const n = Number(String(raw).replace(/[^\d.]/g, ''));
-  return Number.isFinite(n) ? n : null;
-}
-
-function firstImage(obj) {
-  const direct = pickFirst(obj, ['imageUrl', 'image', 'img', 'thumbnail']);
-  if (direct) return direct;
-  if (Array.isArray(obj?.images) && obj.images.length) {
-    const first = obj.images[0];
-    return typeof first === 'string' ? first : (first?.url ?? '');
-  }
-  return '';
-}
-
-function normalizeWildberries(items) {
-  return items.map((it) => {
-    const article = pickFirst(it, ['article', 'id', 'sku', 'nmId', 'productId']);
-    return {
-      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
-      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
-      url:
-        pickFirst(it, ['url', 'link', 'productUrl']) ??
-        (article ? `https://www.wildberries.ru/catalog/${article}/detail.aspx` : ''),
-      imageUrl: firstImage(it),
-      marketplace: 'wildberries',
-      article: article != null ? String(article) : '',
-    };
-  });
-}
-
-function normalizeOzon(items) {
-  return items.map((it) => {
-    const article = pickFirst(it, ['article', 'id', 'sku', 'productId']);
-    return {
-      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
-      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
-      url: pickFirst(it, ['url', 'link', 'productUrl']) ?? '',
-      imageUrl: firstImage(it),
-      marketplace: 'ozon',
-      article: article != null ? String(article) : '',
-    };
-  });
-}
 
 // ─── AI-объяснения ───────────────────────────────────────────────
 

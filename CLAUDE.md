@@ -3,8 +3,13 @@
 ## Что это за проект
 
 AIVibe — iOS-приложение для AI-ассистента по дизайну интерьеров с поддержкой LiDAR-сканирования
-и AR-расстановки мебели. Целевой рынок: Россия. Backend на Yandex Cloud Functions, маркетплейсы
-Ozon и Wildberries, AI на YandexGPT 5 + GigaChat-Max + CoreML fallback (Triplex Fallback).
+и AR-расстановки мебели. Целевой рынок: Россия. Backend на Yandex Cloud Functions, источник
+мебели — каталог фабрик-партнёров (B2B, см. `docs/BUSINESS_MODEL.md`), AI на YandexGPT 5 +
+GigaChat-Max + CoreML fallback (Triplex Fallback).
+
+**⚠️ Пивот 2026-06:** от маркетплейсов (Ozon/Wildberries) отказались — работаем только с
+мебельными фабриками и частным бизнесом. Упоминания Ozon/WB в коде недопустимы (в `SESSION_*.md`
+и `docs/archive/` — историческая запись, не трогать).
 
 ## ⚠️ Терминологическая дисциплина
 
@@ -26,7 +31,7 @@ Ozon и Wildberries, AI на YandexGPT 5 + GigaChat-Max + CoreML fallback (Tripl
 - **Xcode**: 26.2+ (требование App Store с 2026-04-28)
 - **Backend**: Node.js 20 (ESM), Yandex Cloud Functions, YDB
 - **AI рантайм**: YandexGPT 5 (основной) → GigaChat-Max (fallback) → CoreML (offline)
-- **Маркетплейсы**: Ozon API v2, Wildberries API, Apify
+- **Каталог товаров**: партнёрский каталог фабрик в YDB (`backend/shared/partner-catalog.js`), конвертация GLB→USDZ
 - **Аналитика**: AppMetrica
 - **CI**: GitHub Actions (macos-26), SwiftLint --strict
 - **Деплой**: Fastlane (iOS), `yc serverless function` (backend)
@@ -98,8 +103,7 @@ Core/AI/
 │       └── DraftShoppingListTool.swift
 │
 └── Connectors/                   # Внешние системы
-    ├── OzonConnector.swift           # actor (rate limit 100/min)
-    ├── WildberriesConnector.swift
+    ├── ConnectorTypes.swift          # ConnectorID, ConnectorError (общие типы)
     └── LockBoxSecretsManager.swift   # actor — Yandex Lockbox обёртка
 ```
 
@@ -111,7 +115,7 @@ Core/AI/
 - **§7 Planning Mode** — активируется на больших комнатах, бюджете > 500K ₽, vague phrases
 - **§8 Goal-like Loop** — `AgentLoop.runGoalLoop()` для long-running задач, checkpoints, stop rules
 - **§9 Auto-compaction** — `SessionCompactor.compactAndRehydrate()`, при > 80% контекста (16K символов)
-- **§10 Skills & Connectors** — `SkillIndex.standardSkills` (design_advisor, furniture_matcher, budget_optimizer), `OzonConnector`, `WildberriesConnector`
+- **§10 Skills & Connectors** — `SkillIndex.standardSkills` (design_advisor, furniture_matcher, budget_optimizer), партнёрский каталог через backend
 - **§12 Audit** — `ApprovalRecord`, риск-классы (`readPublic` → `financial`)
 - **§13 Observability** — `AgentObservability`, AppMetrica события, Circuit Breaker метрики
 - **§14 Launch prep** — `AIVibeTests/AI/Integration/AgentIntegrationTests.swift`

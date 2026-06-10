@@ -1,6 +1,6 @@
 // backend/__tests__/partner-catalog.test.js
-// Тесты B2/B3: партнёрский каталог как источник маркетплейса (фичефлаг
-// CATALOG_SOURCE) и резолвер артикулов (action='resolve').
+// Тесты B2/B3: партнёрский каталог — единственный источник товаров
+// (пивот 2026-06: Ozon/WB убраны) и резолвер артикулов (action='resolve').
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,6 @@ beforeEach(() => {
 afterEach(() => {
     globalThis.fetch = realFetch;
     delete process.env.YDB_DOCUMENT_API_ENDPOINT;
-    delete process.env.CATALOG_SOURCE;
 });
 
 function record(article, extra = {}) {
@@ -45,7 +44,7 @@ function record(article, extra = {}) {
     };
 }
 
-// Последовательные ответы Document API; все прочие URL (Apify, LLM) бросают —
+// Последовательные ответы Document API; все прочие URL (LLM) бросают —
 // best-effort-обвязки (enrich) это глотают, а неожиданные вызовы валят тест.
 function mockYdb(responses) {
     const calls = [];
@@ -164,10 +163,9 @@ test('resolveArticle: не найден → null', async () => {
     assert.equal(await resolveArticle('TEST-NOPE-404'), null);
 });
 
-// ─── handler: фичефлаг CATALOG_SOURCE ────────────────────────────
+// ─── handler: поиск по партнёрскому каталогу ─────────────────────
 
-test('handler: CATALOG_SOURCE=partner → товары из каталога, источник partner', async () => {
-    process.env.CATALOG_SOURCE = 'partner';
+test('handler: товары из каталога, источник partner', async () => {
     mockYdb([{ Items: [toDynamo(record('TEST-1'))] }]);
 
     const res = await handler(searchEvent({ query: 'диван', userId: 'u-b2-partner' }));
@@ -179,15 +177,14 @@ test('handler: CATALOG_SOURCE=partner → товары из каталога, и
     assert.equal(body.products[0].usdzUrl, 'https://storage.test/models/TEST-1.usdz');
 });
 
-test('handler: флаг выключен → путь Apify (источники wildberries/ozon)', async () => {
-    delete process.env.CATALOG_SOURCE;
-    mockYdb([{}]); // любые сетевые вызовы (Apify) бросают → акторы дают пустую выдачу
+test('handler: пустой каталог → 200 без ошибки, products пуст', async () => {
+    mockYdb([{}]); // Scan без Items → каталог ничего не нашёл
 
-    const res = await handler(searchEvent({ query: 'диван', userId: 'u-b2-apify' }));
+    const res = await handler(searchEvent({ query: 'диван', userId: 'u-b2-empty' }));
     const body = JSON.parse(res.body);
 
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(body.marketplace_sources, { wildberries: 0, ozon: 0 });
+    assert.deepEqual(body.marketplace_sources, { partner: 0 });
     assert.deepEqual(body.products, []);
 });
 
@@ -223,7 +220,6 @@ test('handler resolve: неизвестный артикул → 404', async () 
 test('handler: заголовок X-App-Token в каноническом регистре принимается', async () => {
     // Yandex Cloud нормализует имена заголовков — прямой lookup по 'x-app-token'
     // давал 403 при верном токене (вскрылось на первом реальном деплое).
-    process.env.CATALOG_SOURCE = 'partner';
     mockYdb([{ Items: [] }]);
 
     const res = await handler({

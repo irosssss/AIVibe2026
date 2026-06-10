@@ -1,10 +1,11 @@
 // backend/shared/partner-catalog.js
-// Партнёрский каталог как источник товаров маркетплейса (B2/B3, Фаза 2).
+// Партнёрский каталог — единственный источник товаров (B2/B3, Фаза 2).
+//
+// Пивот 2026-06 (docs/BUSINESS_MODEL.md): маркетплейсы Ozon/Wildberries убраны,
+// работаем только с каталогом мебельных фабрик-партнёров.
 //
 // Источник данных — таблица YDB `products` (контракт полей — в catalog-search.js),
 // наполняется конвейером B1; тестовое наполнение — backend/scripts/seed-test-catalog.mjs.
-// Включается фичефлагом CATALOG_SOURCE=partner (env функции aivibe-marketplace);
-// любое другое значение или отсутствие → прежний путь Apify (фолбэк на cold start).
 
 import { searchCatalog } from './catalog-search.js';
 import { ydbClient } from './ydb-client.js';
@@ -45,8 +46,8 @@ export function detectFurnitureCategory(query) {
 }
 
 /**
- * Запись каталога → формат products ответа маркетплейса
- * (тот же, что у нормализаторов WB/Ozon, + usdzUrl/category/style).
+ * Запись каталога → формат products ответа функции поиска
+ * (исторический контракт клиента + usdzUrl/category/style).
  */
 export function toMarketplaceProduct(record) {
     return {

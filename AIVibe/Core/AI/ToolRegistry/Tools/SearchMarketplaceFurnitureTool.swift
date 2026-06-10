@@ -1,6 +1,8 @@
 // AIVibe/Core/AI/ToolRegistry/Tools/SearchMarketplaceFurnitureTool.swift
-// Stage 2.2: Domain-specific инструмент — поиск мебели на Wildberries/Ozon.
+// Stage 2.2: Domain-specific инструмент — поиск мебели в каталоге фабрик-партнёров.
 // Blueprint §6: search_marketplace_furniture — поиск по категории, стилю, бюджету.
+// Пивот 2026-06 (docs/BUSINESS_MODEL.md): маркетплейсы Ozon/WB убраны,
+// единственный источник — партнёрский каталог (backend/functions/marketplace).
 
 import Foundation
 
@@ -8,13 +10,13 @@ import Foundation
 
 /// Результат поиска одного товара (Blueprint: results).
 public struct FurnitureSearchResult: Sendable, Equatable, Codable {
-    /// ID товара в маркетплейсе.
+    /// Артикул товара в каталоге.
     public let id: String
     /// Название товара.
     public let name: String
     /// Цена в рублях.
     public let priceRub: Int
-    /// Маркетплейс.
+    /// Источник товара (фабрика-партнёр).
     public let marketplace: Marketplace
     /// URL страницы товара.
     public let url: String
@@ -66,9 +68,9 @@ public struct FurnitureDimensions: Sendable, Equatable, Codable {
     }
 }
 
+/// Источник товаров. После пивота 2026-06 — только каталог фабрик-партнёров.
 public enum Marketplace: String, Sendable, Equatable, Codable {
-    case wildberries
-    case ozon
+    case partner
 }
 
 public enum FurnitureCategory: String, Sendable, Equatable, Codable {
@@ -128,7 +130,7 @@ public struct FurnitureSearchResponse: Sendable, Equatable, Codable {
 
 // MARK: - Tool Implementation
 
-/// Инструмент поиска мебели на российских маркетплейсах.
+/// Инструмент поиска мебели в каталоге фабрик-партнёров.
 ///
 /// Blueprint §6:
 /// - risk_class: read_public_data
@@ -142,7 +144,7 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
 
     public let name = "search_marketplace_furniture"
     public let description = """
-    Ищет мебель на Wildberries и Ozon по категории, стилю и бюджету.
+    Ищет мебель в каталоге фабрик-партнёров AIVibe по категории, стилю и бюджету.
     Возвращает до 20 товаров с ценами, размерами, рейтингом и наличием.
     Поддерживает категории: sofa, table, chair, lamp, cabinet, decor, rug.
     Стили: scandinavian, modern, loft, classic, minimal.
@@ -168,11 +170,6 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
             "budget_max_rub": SchemaProperty(
                 type: .integer,
                 description: "Максимальный бюджет на один предмет (в рублях)"
-            ),
-            "marketplace": SchemaProperty(
-                type: .string,
-                description: "Маркетплейс для поиска",
-                enumValues: ["wildberries", "ozon", "all"]
             )
         ],
         required: ["query", "category", "budget_max_rub"]
@@ -226,7 +223,6 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
         // swiftlint:enable force_cast
         let budgetMaxRub = validated["budget_max_rub"] as? Int ?? 500_000
         let styleStr = validated["style"] as? String
-        let marketplaceStr = validated["marketplace"] as? String ?? "all"
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -238,8 +234,7 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
             query: query,
             category: categoryStr,
             budgetMaxRub: budgetMaxRub,
-            style: styleStr,
-            marketplace: marketplaceStr
+            style: styleStr
         )
         #else
         // Windows / CI: mock-поиск
@@ -248,7 +243,6 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
             category: categoryStr,
             budgetMaxRub: budgetMaxRub,
             style: styleStr,
-            marketplace: marketplaceStr,
             startTime: startTime
         )
         #endif
@@ -258,14 +252,13 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
 
     // MARK: - Mock Search (Windows / CI)
 
-    /// Заглушка поиска для разработки без доступа к API маркетплейсов.
+    /// Заглушка поиска для разработки без доступа к партнёрскому каталогу.
     /// Генерирует от 0 до maxResults реалистичных товаров.
     private func mockSearch(
         query: String,
         category: String,
         budgetMaxRub: Int,
         style: String?,
-        marketplace: String,
         startTime: CFAbsoluteTime
     ) -> FurnitureSearchResponse {
         let categoryEnum = FurnitureCategory(rawValue: category) ?? .other
@@ -275,16 +268,10 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
         let hash = abs(query.hashValue)
         let count = min((hash % 15) + 3, maxResults)
 
-        let marketplaces: [Marketplace] = marketplace == "all"
-            ? [.wildberries, .ozon]
-            : [Marketplace(rawValue: marketplace) ?? .wildberries]
-
         var results: [FurnitureSearchResult] = []
 
         for i in 0..<count {
-            let mp = marketplaces[i % marketplaces.count]
-            let prefix = mp == .wildberries ? "WB" : "OZN"
-            let itemId = "\(prefix)-\(abs((hash + i).hashValue) % 1_000_000)"
+            let itemId = "PRT-\(abs((hash + i).hashValue) % 1_000_000)"
 
             let prices: [Int] = [4500, 8900, 12_900, 18_500, 24_900, 35_000, 49_900, 65_000, 89_000, 120_000]
             let price = prices[i % prices.count]
@@ -301,9 +288,9 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
                 id: itemId,
                 name: "\(name) (\(styleEnum?.rawValue ?? "универсальный"))",
                 priceRub: price,
-                marketplace: mp,
-                url: "https://www.\(mp == .wildberries ? "wildberries.ru" : "ozon.ru")/product/\(itemId)",
-                thumbnail: "https://img.\(mp == .wildberries ? "wb" : "ozon").ru/\(itemId)_thumb.jpg",
+                marketplace: .partner,
+                url: "https://catalog.aivibe.example/product/\(itemId)",
+                thumbnail: "https://catalog.aivibe.example/img/\(itemId)_thumb.jpg",
                 dimensionsCm: dims,
                 rating: Float((hash + i) % 50) / 10.0, // 0.0–4.9
                 inStock: (hash + i) % 5 != 0,           // 80% в наличии
@@ -316,28 +303,26 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
         return FurnitureSearchResponse(
             results: results,
             totalFound: results.count,
-            searchedMarketplaces: marketplaces,
+            searchedMarketplaces: [.partner],
             latencyMs: latency
         )
     }
 
     #if canImport(FoundationNetworking)
-    /// Реальный HTTP-запрос к API маркетплейса через NetworkClient.
+    /// Реальный HTTP-запрос к партнёрскому каталогу через NetworkClient.
     private func performRealSearch(
         query: String,
         category: String,
         budgetMaxRub: Int,
-        style: String?,
-        marketplace: String
+        style: String?
     ) async throws -> FurnitureSearchResponse {
-        // TODO: интеграция с реальным API Wildberries/Ozon через backend/functions/marketplace
+        // TODO: интеграция с каталогом фабрик через backend/functions/marketplace (YDB)
         // Пока возвращает mock-результат
         return mockSearch(
             query: query,
             category: category,
             budgetMaxRub: budgetMaxRub,
             style: style,
-            marketplace: marketplace,
             startTime: CFAbsoluteTimeGetCurrent()
         )
     }

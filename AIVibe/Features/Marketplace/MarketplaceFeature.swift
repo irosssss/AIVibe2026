@@ -12,7 +12,7 @@ struct MarketplaceProduct: Codable, Equatable, Identifiable {
     let url: URL
     let imageURL: URL?
     let aiReason: String       // от YandexGPT
-    let marketplace: String    // "wildberries" | "ozon"
+    let marketplace: String    // "partner" — каталог фабрик (пивот 2026-06)
 }
 
 @Reducer
@@ -145,7 +145,7 @@ extension MarketplaceClient: DependencyKey {
 
     static let testValue = MarketplaceClient(
         recommend: { _, _, _ in
-            guard let testURL = URL(string: "https://wildberries.ru") else { return [] }
+            guard let testURL = URL(string: "https://partner.test/p/PRT-1") else { return [] }
             return [MarketplaceProduct(
                 id: "1",
                 name: "Диван Осло 3-местный",
@@ -153,7 +153,7 @@ extension MarketplaceClient: DependencyKey {
                 url: testURL,
                 imageURL: nil,
                 aiReason: "Скандинавский дизайн идеально подходит для выбранного стиля",
-                marketplace: "wildberries"
+                marketplace: "partner"
             )]
         }
     )

@@ -39,24 +39,23 @@ public struct Chip<Content: View>: View {
     }
 }
 
-// MARK: - Marketplace badge
+// MARK: - Source badge
 
-/// Маркетплейс — для UI-бэйджа. Отдельный тип от Core/AI `Marketplace`,
+/// Источник товара — для UI-бэйджа. Отдельный тип от Core/AI `Marketplace`,
 /// чтобы DesignSystem не зависел от ToolRegistry. Мостинг — на уровне фич.
+/// Пивот 2026-06: только фабрики-партнёры (docs/BUSINESS_MODEL.md).
 public enum AIMarket: String, Sendable {
-    case ozon, wildberries
+    case partner
 
     public var label: String {
         switch self {
-        case .ozon: return "OZON"
-        case .wildberries: return "WB"
+        case .partner: return "ФАБРИКА"
         }
     }
 
     public var brandColor: Color {
         switch self {
-        case .ozon: return Color(hex: 0x005AD2, alpha: 0.92)
-        case .wildberries: return Color(hex: 0xCF158D, alpha: 0.92)
+        case .partner: return Color(hex: 0x88A084, alpha: 0.92)
         }
     }
 }
@@ -294,7 +293,7 @@ public struct CapsLabel: View {
 #Preview {
     AIThemeReader {
         VStack(spacing: 16) {
-            HStack { MarketBadge(.ozon); MarketBadge(.wildberries) }
+            HStack { MarketBadge(.partner) }
             PrimaryButton("Начать сканирование", icon: "viewfinder")
             SecondaryButton("Пересканировать")
             AIProgressBar(value: 0.7).frame(width: 240)

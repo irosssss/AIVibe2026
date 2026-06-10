@@ -9,7 +9,7 @@ iOS-приложение для дизайна интерьеров с AR-рас
 - 📡 **LiDAR сканирование** — RoomPlan 2 создаёт точную 3D-модель комнаты
 - 🤖 **Российский AI** — YandexGPT 5 анализирует интерьер, GigaChat как резерв, CoreML оффлайн
 - 🪄 **AR дизайнер** — RealityKit + SpatialTracking, расставляй и двигай мебель через камеру
-- 🛒 **Маркетплейсы РФ** — товары с Wildberries и Ozon через Apify
+- 🛒 **Каталог фабрик-партнёров** — реальная мебель российских производителей (B2B, YDB-каталог)
 - 📵 **Оффлайн-режим** — Core ML работает без интернета
 - 🤝 **Refine loop** — AI переставляет мебель по фидбеку пользователя
 
@@ -27,7 +27,7 @@ iOS-приложение для дизайна интерьеров с AR-рас
 | AI (резервный) | GigaChat-Max |
 | AI (оффлайн) | Core ML (template matching) |
 | Backend | Yandex Cloud Functions (Node.js 20 ESM) |
-| Маркетплейсы | Apify actors (Wildberries, Ozon) |
+| Каталог товаров | Партнёрский каталог фабрик (YDB, `partner-catalog.js`) |
 | AI-поиск | RAG (YandexGPT embeddings + cosine similarity) |
 | Аналитика | AppMetrica (wrapper) |
 | CI/CD | GitHub Actions (`macos-26` runner) + SwiftLint --strict |
