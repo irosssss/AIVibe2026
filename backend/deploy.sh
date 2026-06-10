@@ -54,9 +54,11 @@ SECRET_KEYS=(
   YOOKASSA_SHOP_ID
   YOOKASSA_SECRET_KEY
 )
+# version-id не указываем — yc сам берёт актуальную версию секрета
+# (литерал "latest" не поддерживается: «Secret ... or its version latest not found»).
 SECRET_FLAGS=()
 for key in "${SECRET_KEYS[@]}"; do
-  SECRET_FLAGS+=(--secret "id=$LOCKBOX_ID,version-id=latest,key=$key,environment-variable=$key")
+  SECRET_FLAGS+=(--secret "id=$LOCKBOX_ID,key=$key,environment-variable=$key")
 done
 
 # ─── Хелпер деплоя ───────────────────────────────────────────────
