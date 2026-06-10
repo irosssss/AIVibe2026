@@ -33,7 +33,7 @@ public enum Haptics {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// Средний tap — primary CTA (Начать сканирование, Открыть Ozon).
+    /// Средний tap — primary CTA (Начать сканирование, Открыть товар).
     public static func medium() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }

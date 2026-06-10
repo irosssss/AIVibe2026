@@ -1,0 +1,7 @@
+{
+  "name": "aivibe-payments",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud Function — подписка PRO/BUSINESS через ЮKassa (создание платежа, статус, вебхук)"
+}

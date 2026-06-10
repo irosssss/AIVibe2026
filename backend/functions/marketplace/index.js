@@ -1,18 +1,24 @@
 // backend/functions/marketplace/index.js
-// Yandex Cloud Function — поиск товаров на маркетплейсах через Apify + YandexGPT.
+// Yandex Cloud Function — поиск товаров в партнёрском каталоге (B2)
+// плюс резолвер артикулов (B3).
+//
+// Пивот 2026-06 (docs/BUSINESS_MODEL.md): маркетплейсы Ozon/Wildberries убраны,
+// единственный источник товаров — каталог фабрик-партнёров в YDB.
 //
 // Security pipeline (CLAUDE.md требование, аналог backend/index.js):
 //   1. APP_TOKEN header check
 //   2. Input validation (length, regex)
 //   3. Rate limit per IP + per userId
 //   4. promptGuard на user-supplied query (попадает в YandexGPT prompt)
-//   5. Параллельный поиск Wildberries + Ozon (Apify), нормализация, YandexGPT enrich
+//   5. Поиск по каталогу YDB (B2), затем YandexGPT enrich.
+//   Отдельное действие body.action='resolve' (B3): артикул → usdz_url/цена.
 
-import { runActor } from '../../shared/apify-client.js';
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+import { searchPartnerCatalog, resolveArticle } from '../../shared/partner-catalog.js';
+import { getHeader } from '../../shared/http-headers.js';
 
 // Вторичный лимит по IP (#17) — backstop против ротации userId в теле запроса.
 const ipLimiter = createRateLimiter({ max: 60 });
@@ -29,14 +35,7 @@ const ALLOWED_STYLES = new Set([
   'современный', // legacy fallback в текущем коде
 ]);
 
-// ВАЖНО: ID акторов нужно подтвердить на apify.com/store перед продакшеном.
-// Поля в выдаче актора тоже стоит сверить во время smoke-теста (см. normalize*).
-const WILDBERRIES_ACTOR = 'epctex/wildberries-scraper';
-const OZON_ACTOR = 'epctex/ozon-scraper';
-
-const MAX_ITEMS_PER_SOURCE = 8;
 const MAX_RESULTS = 10;
-const ACTOR_OPTIONS = { timeoutSecs: 40, memoryMbytes: 512 };
 
 const rateLimitStore = new Map();
 
@@ -75,8 +74,7 @@ export const handler = async (event, context) => {
     }
 
     // 1. APP_TOKEN check
-    const appToken = event.headers?.[APP_TOKEN_HEADER]
-                  || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+    const appToken = getHeader(event, APP_TOKEN_HEADER);
     const expectedToken = process.env.APP_TOKEN;
     if (!expectedToken || appToken !== expectedToken) {
       return buildResponse(403, { error: 'Forbidden: invalid App Token' });
@@ -89,32 +87,17 @@ export const handler = async (event, context) => {
     } catch {
       return buildResponse(400, { error: 'Invalid JSON body' });
     }
-    const { query, roomStyle, budget, userId } = body;
+    const { query, roomStyle, budget, userId, action, article } = body;
 
-    if (!query || typeof query !== 'string') {
-      return buildResponse(400, { error: 'Missing required field: query' });
-    }
     if (!userId || typeof userId !== 'string') {
       return buildResponse(400, { error: 'Missing required field: userId' });
-    }
-
-    // 3. Input limits + regex
-    if (query.length > MAX_QUERY_LENGTH) {
-      return buildResponse(413, { error: 'Query too long' });
     }
     if (userId.length > MAX_USER_ID_LENGTH || !/^[a-zA-Z0-9_.-]+$/.test(userId)) {
       return buildResponse(400, { error: 'Invalid userId format' });
     }
-    // roomStyle — whitelist enum, защита от prompt injection через style
-    const safeStyle = (typeof roomStyle === 'string' && ALLOWED_STYLES.has(roomStyle))
-      ? roomStyle
-      : 'modern';
-    // budget — только число, защита от объектов/строк-инъекций
-    const safeBudget = (typeof budget === 'number' && budget > 0 && budget < 100_000_000)
-      ? budget
-      : null;
 
-    // 4. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    // 3. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    // До резолвера и поиска: лимит общий для всех действий функции.
     const ipInfo = ipLimiter(clientIp(event));
     if (!ipInfo.allowed) {
       return buildResponse(429, { error: 'Rate limit exceeded (per-IP).', retryAfter: 60 });
@@ -124,7 +107,38 @@ export const handler = async (event, context) => {
       return buildResponse(429, { error: 'Rate limit exceeded. Max 20 req/min.', retryAfter: 60 });
     }
 
-    // 5. promptGuard на query — попадает напрямую в YandexGPT prompt в enrichWithYandexGPT
+    // 4. Резолвер артикулов (B3): article → usdz_url/цена/карточка партнёра.
+    // LLM не вызывается, поэтому promptGuard не нужен; формат article валидирует
+    // resolveArticle (тот же regex, что userId).
+    if (action === 'resolve') {
+      if (!article || typeof article !== 'string') {
+        return buildResponse(400, { error: 'Missing required field: article' });
+      }
+      const product = await resolveArticle(article);
+      if (!product) {
+        return buildResponse(404, { error: 'Article not found' });
+      }
+      return buildResponse(200, { product, latency_ms: Date.now() - startTime });
+    }
+
+    // 5. Поиск: input limits + regex
+    if (!query || typeof query !== 'string') {
+      return buildResponse(400, { error: 'Missing required field: query' });
+    }
+    if (query.length > MAX_QUERY_LENGTH) {
+      return buildResponse(413, { error: 'Query too long' });
+    }
+    // roomStyle — whitelist enum, защита от prompt injection через style
+    const explicitStyle = (typeof roomStyle === 'string' && ALLOWED_STYLES.has(roomStyle))
+      ? roomStyle
+      : null;
+    const safeStyle = explicitStyle ?? 'modern';
+    // budget — только число, защита от объектов/строк-инъекций
+    const safeBudget = (typeof budget === 'number' && budget > 0 && budget < 100_000_000)
+      ? budget
+      : null;
+
+    // 6. promptGuard на query — попадает напрямую в YandexGPT prompt в enrichWithYandexGPT
     const guard = guardPrompt(query);
     if (!guard.allowed) {
       console.warn('[guard] marketplace query rejected', JSON.stringify({
@@ -134,22 +148,15 @@ export const handler = async (event, context) => {
       return buildResponse(400, { error: 'Content policy violation' });
     }
 
-    // 6. Secrets + параллельный поиск по двум маркетплейсам.
+    // 7. Источник товаров — партнёрский каталог YDB (B2).
     await getSecrets();
 
-    const actorInput = { search: query, maxItems: MAX_ITEMS_PER_SOURCE, proxy: { useApifyProxy: true } };
-
-    // Один упавший актор не валит весь запрос.
-    const [wbResult, ozonResult] = await Promise.allSettled([
-      runActor(WILDBERRIES_ACTOR, actorInput, ACTOR_OPTIONS),
-      runActor(OZON_ACTOR, actorInput, ACTOR_OPTIONS),
-    ]);
-
-    const wbItems = settledItems(wbResult, 'wildberries');
-    const ozonItems = settledItems(ozonResult, 'ozon');
-
-    // Нормализация к общему формату.
-    let products = [...normalizeWildberries(wbItems), ...normalizeOzon(ozonItems)];
+    let products = await searchPartnerCatalog({
+      query,
+      style: explicitStyle,
+      topK: MAX_RESULTS,
+    });
+    const marketplace_sources = { partner: products.length };
 
     // Фильтр по бюджету (safeBudget уже провалидирован выше).
     if (safeBudget) {
@@ -157,10 +164,9 @@ export const handler = async (event, context) => {
     }
     products = products.slice(0, MAX_RESULTS);
 
-    const marketplace_sources = { wildberries: wbItems.length, ozon: ozonItems.length };
     const rateLimit = { remaining: rateInfo.remaining, resetInMs: RATE_WINDOW_MS };
 
-    // Оба источника пусты — понятный ответ, без ошибки.
+    // Источники пусты — понятный ответ, без ошибки.
     if (products.length === 0) {
       return buildResponse(200, {
         products: [],
@@ -190,76 +196,6 @@ export const handler = async (event, context) => {
     return buildResponse(500, { error: 'internal_error', requestId });
   }
 };
-
-// ─── Результаты Promise.allSettled ───────────────────────────────
-
-function settledItems(result, label) {
-  if (result.status === 'fulfilled' && Array.isArray(result.value)) {
-    return result.value;
-  }
-  if (result.status === 'rejected') {
-    console.warn(`[marketplace] ${label} actor failed:`, result.reason?.message ?? result.reason);
-  }
-  return [];
-}
-
-// ─── Нормализация ────────────────────────────────────────────────
-// Поля акторов могут отличаться — берём первое подходящее имя поля.
-
-function pickFirst(obj, keys) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null && v !== '') return v;
-  }
-  return undefined;
-}
-
-function normalizePrice(raw) {
-  if (raw == null) return null;
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-  const n = Number(String(raw).replace(/[^\d.]/g, ''));
-  return Number.isFinite(n) ? n : null;
-}
-
-function firstImage(obj) {
-  const direct = pickFirst(obj, ['imageUrl', 'image', 'img', 'thumbnail']);
-  if (direct) return direct;
-  if (Array.isArray(obj?.images) && obj.images.length) {
-    const first = obj.images[0];
-    return typeof first === 'string' ? first : (first?.url ?? '');
-  }
-  return '';
-}
-
-function normalizeWildberries(items) {
-  return items.map((it) => {
-    const article = pickFirst(it, ['article', 'id', 'sku', 'nmId', 'productId']);
-    return {
-      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
-      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
-      url:
-        pickFirst(it, ['url', 'link', 'productUrl']) ??
-        (article ? `https://www.wildberries.ru/catalog/${article}/detail.aspx` : ''),
-      imageUrl: firstImage(it),
-      marketplace: 'wildberries',
-      article: article != null ? String(article) : '',
-    };
-  });
-}
-
-function normalizeOzon(items) {
-  return items.map((it) => {
-    const article = pickFirst(it, ['article', 'id', 'sku', 'productId']);
-    return {
-      name: pickFirst(it, ['name', 'title', 'productName']) ?? 'Без названия',
-      price: normalizePrice(pickFirst(it, ['price', 'salePrice', 'priceWithSale', 'finalPrice'])),
-      url: pickFirst(it, ['url', 'link', 'productUrl']) ?? '',
-      imageUrl: firstImage(it),
-      marketplace: 'ozon',
-      article: article != null ? String(article) : '',
-    };
-  });
-}
 
 // ─── AI-объяснения ───────────────────────────────────────────────
 

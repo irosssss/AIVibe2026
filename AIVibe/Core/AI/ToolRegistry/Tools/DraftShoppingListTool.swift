@@ -11,11 +11,11 @@ import Foundation
 public struct ShoppingListItem: Sendable, Equatable, Codable {
     /// Название товара.
     public let name: String
-    /// URL товара в маркетплейсе.
+    /// URL товара на сайте фабрики-партнёра.
     public let url: String
     /// Цена в рублях.
     public let priceRub: Int
-    /// Маркетплейс.
+    /// Источник товара ("partner" — фабрика-партнёр).
     public let marketplace: String
     /// Количество.
     public let quantity: Int
@@ -170,7 +170,7 @@ public struct DraftShoppingListTool: AgentTool {
     public let name = "draft_shopping_list"
     public let description = """
     Формирует итоговый список покупок на основе выбранной мебели.
-    Принимает массив ID товаров с маркетплейсами, агрегирует цены,
+    Принимает массив ID товаров из каталога фабрик-партнёров, агрегирует цены,
     проверяет бюджет и выдаёт рекомендации по оптимизации.
     НЕ совершает покупки — только формирует черновик списка.
     """
@@ -226,10 +226,10 @@ public struct DraftShoppingListTool: AgentTool {
                 )
             }
             guard let marketplace = item["marketplace"] as? String,
-                  ["wildberries", "ozon"].contains(marketplace) else {
+                  marketplace == "partner" else {
                 throw ToolError.validationFailed(
                     tool: name,
-                    reason: "Элемент \(index): 'marketplace' должен быть 'wildberries' или 'ozon'"
+                    reason: "Элемент \(index): 'marketplace' должен быть 'partner' (каталог фабрик)"
                 )
             }
         }
@@ -302,14 +302,14 @@ public struct DraftShoppingListTool: AgentTool {
             let price = deterministicPrice(for: selection.furnitureId)
 
             // Детерминированное имя на основе furnitureId
-            let name = deterministicName(for: selection.furnitureId, marketplace: selection.marketplace)
+            let name = deterministicName(for: selection.furnitureId)
 
             // Детерминированная категория
             let category = deterministicCategory(for: selection.furnitureId)
 
             let item = ShoppingListItem(
                 name: name,
-                url: "https://www.\(selection.marketplace == "wildberries" ? "wildberries.ru" : "ozon.ru")/product/\(selection.furnitureId)",
+                url: "https://catalog.aivibe.example/product/\(selection.furnitureId)",
                 priceRub: price,
                 marketplace: selection.marketplace,
                 quantity: selection.quantity,
@@ -335,7 +335,7 @@ public struct DraftShoppingListTool: AgentTool {
                 "Превышение бюджета на \(abs(budgetRemaining)) ₽ (\(overPercent)% сверх лимита)",
                 "💡 Рассмотрите альтернативы подешевле в категориях: \(topCategories(items).joined(separator: ", "))",
                 "💡 Попробуйте уменьшить количество декоративных элементов",
-                "💡 Проверьте Ozon — там могут быть аналоги дешевле на 10-20%"
+                "💡 У фабрик-партнёров часто есть аналоги дешевле на 10-20% — спросите AI"
             ]
         } else if budgetRemaining > input.budgetMaxRub * 50 / 100 {
             budgetWarning = .underutilized
@@ -350,7 +350,7 @@ public struct DraftShoppingListTool: AgentTool {
             optimizationTips = [
                 "Бюджет почти исчерпан: осталось \(budgetRemaining) ₽",
                 "💡 Отложите часть декора на следующий месяц",
-                "💡 Проверьте сезонные скидки на Wildberries"
+                "💡 Уточните сезонные акции фабрик-партнёров"
             ]
         } else {
             budgetWarning = .ok
@@ -395,9 +395,9 @@ public struct DraftShoppingListTool: AgentTool {
     }
 
     /// Детерминированное имя товара.
-    private func deterministicName(for furnitureId: String, marketplace: String) -> String {
+    private func deterministicName(for furnitureId: String) -> String {
         let hash = abs(furnitureId.hashValue)
-        let prefix = marketplace == "wildberries" ? "WB" : "OZN"
+        let prefix = "PRT"
 
         let names = [
             "Диван угловой «Комфорт»",
@@ -456,11 +456,11 @@ public extension DraftShoppingListTool {
     /// Создаёт тестовый список покупок для preview/SwiftUI.
     static func previewList(budget: Int = 350_000) -> ShoppingListResponse {
         let selections: [[String: Any]] = [
-            ["furniture_id": "WB-123456", "marketplace": "wildberries", "quantity": 1],
-            ["furniture_id": "OZN-789012", "marketplace": "ozon", "quantity": 1],
-            ["furniture_id": "WB-345678", "marketplace": "wildberries", "quantity": 4],
-            ["furniture_id": "OZN-901234", "marketplace": "ozon", "quantity": 1],
-            ["furniture_id": "WB-567890", "marketplace": "wildberries", "quantity": 2]
+            ["furniture_id": "PRT-123456", "marketplace": "partner", "quantity": 1],
+            ["furniture_id": "PRT-789012", "marketplace": "partner", "quantity": 1],
+            ["furniture_id": "PRT-345678", "marketplace": "partner", "quantity": 4],
+            ["furniture_id": "PRT-901234", "marketplace": "partner", "quantity": 1],
+            ["furniture_id": "PRT-567890", "marketplace": "partner", "quantity": 2]
         ]
 
         let input = DraftShoppingListInput(

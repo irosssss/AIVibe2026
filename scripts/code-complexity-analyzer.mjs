@@ -225,22 +225,32 @@ if (loops === null) {
 }
 
 // ─── 5. RAG search — full scan лимит ──────────────────────────────
+// После B6 поиск обязан идти через scanFiltered (пре-фильтр на стороне YDB,
+// страницы с потолком), а не через ydbClient.scan() всей таблицы.
 
 logCheck(5, 'RAG search — full scan лимит');
 
-const ragSearchLimit = extractNumber(PATHS.ragSearch, /limit:\s*(\d+)/);
+const ragSearchText = readFile(PATHS.ragSearch);
 
-if (ragSearchLimit === null) {
+if (ragSearchText === null) {
     logMissing(PATHS.ragSearch);
     results.push({ name: 'RAG search full scan', warn: false, skipped: true });
 } else {
-    logInfo(`scan limit = ${ragSearchLimit}`);
-    const warn_scan = ragSearchLimit > THRESHOLDS.ragSearchScanLimit;
-    if (warn_scan) {
-        logWarn(`Лимит ${ragSearchLimit} > ${THRESHOLDS.ragSearchScanLimit} — full scan загружает все записи в память`);
-        logWarn('Рассмотреть vector index в YDB или k-NN поиск');
+    const usesFullScan = /ydbClient\.scan\(/.test(ragSearchText);
+    const usesFiltered = /scanFiltered\(/.test(ragSearchText);
+    const pageLimit = extractNumber(PATHS.ragSearch, /PAGE_LIMIT\s*=\s*(\d+)/);
+    logInfo(`scanFiltered: ${usesFiltered}, full scan: ${usesFullScan}, PAGE_LIMIT = ${pageLimit}`);
+
+    let warn_scan = false;
+    if (usesFullScan || !usesFiltered) {
+        warn_scan = true;
+        logWarn('RAG-поиск не использует scanFiltered — full scan загружает все записи в память');
+        logWarn('Фильтрация должна выполняться на стороне YDB (B6)');
+    } else if (pageLimit !== null && pageLimit > THRESHOLDS.ragSearchScanLimit) {
+        warn_scan = true;
+        logWarn(`PAGE_LIMIT ${pageLimit} > ${THRESHOLDS.ragSearchScanLimit} — слишком крупные страницы скана`);
     } else {
-        logOk(`Лимит ${ragSearchLimit} ≤ ${THRESHOLDS.ragSearchScanLimit}`);
+        logOk(`Пре-фильтр на стороне YDB, страница ≤ ${THRESHOLDS.ragSearchScanLimit}`);
     }
     results.push({ name: 'RAG search full scan', warn: warn_scan });
 }

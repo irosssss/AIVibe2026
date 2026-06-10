@@ -7,6 +7,9 @@
 import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
 import { triplexFallback, circuitStatus, circuitReset, clearCache, cacheSize } from './shared/triplex-fallback.js';
+import { enrichPromptWithRAG } from './shared/rag-search.js';
+import { selectModel } from './shared/model-router.js';
+import { getHeader } from './shared/http-headers.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -69,10 +72,7 @@ export const handler = async (event, context) => {
     const method = event.httpMethod;
 
     // ── 0. Request ID (генерируем или берём из заголовка) ──────────
-    const requestId =
-        event.headers?.[REQUEST_ID_HEADER] ||
-        event.headers?.[REQUEST_ID_HEADER.toLowerCase()] ||
-        crypto.randomUUID();
+    const requestId = getHeader(event, REQUEST_ID_HEADER) || crypto.randomUUID();
 
     /** Лог с единым контекстом для всего запроса */
     const log = (level, msg, extra = {}) => {
@@ -141,8 +141,7 @@ export const handler = async (event, context) => {
     }
 
     // ── 3. Валидация App Token ───────────────────────────────────
-    const appToken = event.headers?.[APP_TOKEN_HEADER]
-                  || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+    const appToken = getHeader(event, APP_TOKEN_HEADER);
 
     const expectedToken = process.env.APP_TOKEN;
     if (!expectedToken || appToken !== expectedToken) {
@@ -206,10 +205,22 @@ export const handler = async (event, context) => {
         console.warn('[security] Strike recorded', { userId: userId.slice(0, 16), strikes: strikeResult.strikes });
     }
 
+    // ── 4.7 RAG-обогащение (после guard/rate limit, перед LLM) ──
+    // Сбой или таймаут RAG → исходный промпт, запрос не страдает.
+    const enriched = await enrichPromptWithRAG(prompt);
+    if (enriched.ragChunks > 0) {
+        log('info', 'RAG context attached', { ragChunks: enriched.ragChunks });
+    }
+
+    // ── 4.8 Роутер модели Lite/Pro (B7) — по ИСХОДНОМУ промпту ──
+    const route = selectModel(prompt, { hasImage: Boolean(imageBase64) });
+    log('info', 'Model routed', { model: route.model, reason: route.reason });
+
     // ── 5. Triplex Fallback (YandexGPT → GigaChat → Cache) ────
     // Использует единую реализацию из shared/triplex-fallback.js
     const triplexResult = await triplexFallback({
-        prompt,
+        prompt: enriched.prompt,
+        model: route.model,
         imageBase64,
         timeoutMs: 25000,
         log: (level, msg, extra) => {
@@ -225,12 +236,15 @@ export const handler = async (event, context) => {
         _l: 'info', _rid: requestId.slice(0, 8), _t: totalLatency,
         msg: 'Response sent',
         provider: triplexResult.provider,
+        model: triplexResult.model,
+        usage: triplexResult.usage,
         rateLimitRemaining: rateInfo.remaining,
     }).slice(0, 500));
 
     return jsonResponse(200, {
         text: triplexResult.text,
         provider: triplexResult.provider,
+        model: triplexResult.model || undefined,
         latencyMs: totalLatency,
         requestId,
         circuitBreaker: triplexResult.circuitSkipped ? { skipped: triplexResult.circuitSkipped } : undefined,
@@ -254,9 +268,8 @@ export const handler = async (event, context) => {
  */
 function handleAdminApi(event, path, method, requestId) {
     // Validate Admin Token (can be same as APP_TOKEN or separate)
-    const adminToken = event.headers?.[APP_TOKEN_HEADER]
-                    || event.headers?.[APP_TOKEN_HEADER.toLowerCase()]
-                    || event.headers?.['x-admin-token'];
+    const adminToken = getHeader(event, APP_TOKEN_HEADER)
+                    || getHeader(event, 'x-admin-token');
     const expectedToken = process.env.APP_TOKEN;
     if (!adminToken || adminToken !== expectedToken) {
         console.warn('[security] Invalid admin token attempt', { path: (path || '').slice(0, 32) });

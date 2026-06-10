@@ -84,7 +84,7 @@ struct AIAdvisorChatView: View {
                 case .awaitingAI, .processingImage:
                     toolCalls = [
                         .init(kind: .analyzingRoom, detail: "Гостиная 18 м²"),
-                        .init(kind: .searching, detail: "Ozon · WB"),
+                        .init(kind: .searching, detail: "Каталог фабрик"),
                         .init(kind: .matchingFurniture, detail: "до 50 000 ₽")
                     ]
                 default:
@@ -182,7 +182,7 @@ struct AIAdvisorChatView: View {
                     .aiType(.title1)
                     .foregroundStyle(c.onSurface)
 
-                Text("Опишите задачу или выберите подсказку. Я предложу варианты с реальными ценами на Ozon и Wildberries.")
+                Text("Опишите задачу или выберите подсказку. Я предложу варианты с реальными ценами от фабрик-партнёров.")
                     .aiType(.body)
                     .foregroundStyle(c.onSurfaceMuted)
                     .padding(.top, 6)

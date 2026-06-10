@@ -162,7 +162,7 @@ private final class MockAIVibeProvider: AIProviderProtocol, @unchecked Sendable 
                   "name": "draft_shopping_list",
                   "arguments": {
                     "furniture_selection": [
-                      {"furniture_id": "wb-001", "marketplace": "wildberries", "quantity": 1}
+                      {"furniture_id": "PRT-001", "marketplace": "partner", "quantity": 1}
                     ]
                   }
                 }
@@ -294,7 +294,7 @@ final class AgentIntegrationFullPipeline: XCTestCase {
               "arguments": {
                 "room": {"room_dimensions": {"width_m": 4, "depth_m": 4.5, "height_m": 2.7}},
                 "furniture_selection": [
-                  {"furniture_id": "wb-001", "position_hint": null}
+                  {"furniture_id": "PRT-001", "position_hint": null}
                 ],
                 "style": "scandinavian"
               }
@@ -314,7 +314,7 @@ final class AgentIntegrationFullPipeline: XCTestCase {
               "name": "draft_shopping_list",
               "arguments": {
                 "furniture_selection": [
-                  {"furniture_id": "wb-001", "marketplace": "wildberries", "quantity": 1}
+                  {"furniture_id": "PRT-001", "marketplace": "partner", "quantity": 1}
                 ]
               }
             }
@@ -327,7 +327,7 @@ final class AgentIntegrationFullPipeline: XCTestCase {
         // Шаг 6: Финальный ответ
         mockProvider.cannedResponse = """
         {
-          "final_answer": "Ваша гостиная 18м² в скандинавском стиле готова! Подобран угловой диван (WB-001), журнальный столик, стеллаж. Общий бюджет: 245 000 ₽. План расстановки и список покупок сформированы."
+          "final_answer": "Ваша гостиная 18м² в скандинавском стиле готова! Подобран угловой диван (PRT-001), журнальный столик, стеллаж. Общий бюджет: 245 000 ₽. План расстановки и список покупок сформированы."
         }
         """
 
@@ -1165,11 +1165,10 @@ final class LaunchGatesVerification: XCTestCase {
         let confirmTool = await registry.get(named: "confirm_purchase_order")
         gates.append(("confirm_purchase_order not registered (MVP)", confirmTool == nil))
 
-        // Gate 6: Marketplace connector инициализируется корректно
-        let mockConnector = WildberriesConnector(apiKey: "test")
-        // WB API без реального ключа вернёт ошибку, проверяем создание
-        gates.append(("WildberriesConnector initializes", true))
-        _ = mockConnector  // Suppress unused warning
+        // Gate 6: Инструмент поиска по каталогу фабрик зарегистрирован
+        // (пивот 2026-06: Ozon/WB убраны, источник — партнёрский каталог)
+        let searchTool = await registry.get(named: "search_marketplace_furniture")
+        gates.append(("partner catalog search tool registered", searchTool != nil))
 
         // Отчёт
         let passedCount = gates.filter(\.passed).count

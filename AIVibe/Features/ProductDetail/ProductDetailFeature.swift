@@ -1,5 +1,5 @@
 // AIVibe/Features/ProductDetail/ProductDetailFeature.swift
-// Карточка товара из маркетплейса + AI-комментарий + sticky действия.
+// Карточка товара фабрики-партнёра + AI-комментарий + sticky действия.
 
 import ComposableArchitecture
 import Foundation
@@ -65,8 +65,8 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
 
     /// Демо-карточка для разработки и preview.
     public static let mock = ProductDetail(
-        market: .ozon,
-        brand: "IKEA · Угловой диван",
+        market: .partner,
+        brand: "Фабрика «Север» · Угловой диван",
         title: "Скандинавия, 240 см, светлый лён",
         price: 45_990,
         oldPrice: 56_990,
