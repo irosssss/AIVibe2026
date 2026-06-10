@@ -89,8 +89,8 @@ jobs:
         env:
           YC_SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
         run: |
-          # printf через env-переменную, а не echo '${{ ... }}': кавычки/спецсимволы
-          # внутри JSON-ключа ломали подстановку (key unmarshal fail, run 26850390723).
+          # printf через env-переменную, а не echo с инлайн-подстановкой секрета:
+          # кавычки/спецсимволы внутри JSON-ключа ломали её (key unmarshal fail, run 26850390723).
           printf '%s' "$YC_SA_KEY_JSON" > /tmp/sa-key.json
           python3 -c "import json; json.load(open('/tmp/sa-key.json'))" || { echo "::error::YC_SA_KEY_JSON — не валидный JSON (вставь содержимое key.json целиком)"; exit 1; }
           yc config set service-account-key /tmp/sa-key.json
