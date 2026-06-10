@@ -61,6 +61,8 @@ done
 
 # ─── Хелпер деплоя ───────────────────────────────────────────────
 # deploy <function-name> <entrypoint> <memory> <timeout> <staging-dir>
+# Доп. флаги для конкретной функции — через массив EXTRA_FLAGS (сбрасывать после).
+EXTRA_FLAGS=()
 deploy() {
   local name="$1" entrypoint="$2" memory="$3" timeout="$4" srcdir="$5"
   echo "→ Пакую и деплою $name ..."
@@ -76,7 +78,8 @@ deploy() {
     --execution-timeout "$timeout" \
     --source-path "$BUILD_DIR/$name.zip" \
     --service-account-id "$SA_ID" \
-    "${SECRET_FLAGS[@]}"
+    "${SECRET_FLAGS[@]}" \
+    ${EXTRA_FLAGS[@]+"${EXTRA_FLAGS[@]}"}
 
   echo "✓ $name задеплоен"
 }
@@ -103,12 +106,16 @@ stage_subfunction() {
 }
 
 # ─── 2. aivibe-marketplace ───────────────────────────────────────
+# Фичефлаг B2: CATALOG_SOURCE=partner → партнёрский каталог YDB,
+# иначе Apify (дефолт). Переключение: CATALOG_SOURCE=partner bash backend/deploy.sh
 S="$BUILD_DIR/marketplace"
 mkdir -p "$S"
 stage_subfunction "$BACKEND/functions/marketplace/index.js" "$S/index.js"
 cp "$BACKEND/functions/marketplace/package.json"   "$S/package.json"
 cp -R "$BACKEND/shared"                             "$S/shared"
+EXTRA_FLAGS=(--environment "CATALOG_SOURCE=${CATALOG_SOURCE:-apify}")
 deploy "aivibe-marketplace" "index.handler" "512m" "60s" "$S"
+EXTRA_FLAGS=()
 
 # ─── 3. aivibe-rag-indexer ───────────────────────────────────────
 S="$BUILD_DIR/rag-indexer"

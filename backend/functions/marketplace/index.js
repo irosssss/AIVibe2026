@@ -1,18 +1,22 @@
 // backend/functions/marketplace/index.js
-// Yandex Cloud Function — поиск товаров на маркетплейсах через Apify + YandexGPT.
+// Yandex Cloud Function — поиск товаров: партнёрский каталог (B2) или Apify,
+// плюс резолвер артикулов (B3).
 //
 // Security pipeline (CLAUDE.md требование, аналог backend/index.js):
 //   1. APP_TOKEN header check
 //   2. Input validation (length, regex)
 //   3. Rate limit per IP + per userId
 //   4. promptGuard на user-supplied query (попадает в YandexGPT prompt)
-//   5. Параллельный поиск Wildberries + Ozon (Apify), нормализация, YandexGPT enrich
+//   5. Источник по фичефлагу CATALOG_SOURCE: 'partner' → каталог YDB (B2),
+//      иначе параллельный поиск Wildberries + Ozon (Apify). Затем YandexGPT enrich.
+//   Отдельное действие body.action='resolve' (B3): артикул → usdz_url/цена.
 
 import { runActor } from '../../shared/apify-client.js';
 import { callYandexGPT } from '../../shared/yandexgpt.js';
 import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+import { searchPartnerCatalog, resolveArticle } from '../../shared/partner-catalog.js';
 
 // Вторичный лимит по IP (#17) — backstop против ротации userId в теле запроса.
 const ipLimiter = createRateLimiter({ max: 60 });
@@ -89,32 +93,17 @@ export const handler = async (event, context) => {
     } catch {
       return buildResponse(400, { error: 'Invalid JSON body' });
     }
-    const { query, roomStyle, budget, userId } = body;
+    const { query, roomStyle, budget, userId, action, article } = body;
 
-    if (!query || typeof query !== 'string') {
-      return buildResponse(400, { error: 'Missing required field: query' });
-    }
     if (!userId || typeof userId !== 'string') {
       return buildResponse(400, { error: 'Missing required field: userId' });
-    }
-
-    // 3. Input limits + regex
-    if (query.length > MAX_QUERY_LENGTH) {
-      return buildResponse(413, { error: 'Query too long' });
     }
     if (userId.length > MAX_USER_ID_LENGTH || !/^[a-zA-Z0-9_.-]+$/.test(userId)) {
       return buildResponse(400, { error: 'Invalid userId format' });
     }
-    // roomStyle — whitelist enum, защита от prompt injection через style
-    const safeStyle = (typeof roomStyle === 'string' && ALLOWED_STYLES.has(roomStyle))
-      ? roomStyle
-      : 'modern';
-    // budget — только число, защита от объектов/строк-инъекций
-    const safeBudget = (typeof budget === 'number' && budget > 0 && budget < 100_000_000)
-      ? budget
-      : null;
 
-    // 4. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    // 3. Rate limit — по IP (backstop против ротации userId, #17) и по userId.
+    // До резолвера и поиска: лимит общий для всех действий функции.
     const ipInfo = ipLimiter(clientIp(event));
     if (!ipInfo.allowed) {
       return buildResponse(429, { error: 'Rate limit exceeded (per-IP).', retryAfter: 60 });
@@ -124,7 +113,38 @@ export const handler = async (event, context) => {
       return buildResponse(429, { error: 'Rate limit exceeded. Max 20 req/min.', retryAfter: 60 });
     }
 
-    // 5. promptGuard на query — попадает напрямую в YandexGPT prompt в enrichWithYandexGPT
+    // 4. Резолвер артикулов (B3): article → usdz_url/цена/карточка партнёра.
+    // LLM не вызывается, поэтому promptGuard не нужен; формат article валидирует
+    // resolveArticle (тот же regex, что userId).
+    if (action === 'resolve') {
+      if (!article || typeof article !== 'string') {
+        return buildResponse(400, { error: 'Missing required field: article' });
+      }
+      const product = await resolveArticle(article);
+      if (!product) {
+        return buildResponse(404, { error: 'Article not found' });
+      }
+      return buildResponse(200, { product, latency_ms: Date.now() - startTime });
+    }
+
+    // 5. Поиск: input limits + regex
+    if (!query || typeof query !== 'string') {
+      return buildResponse(400, { error: 'Missing required field: query' });
+    }
+    if (query.length > MAX_QUERY_LENGTH) {
+      return buildResponse(413, { error: 'Query too long' });
+    }
+    // roomStyle — whitelist enum, защита от prompt injection через style
+    const explicitStyle = (typeof roomStyle === 'string' && ALLOWED_STYLES.has(roomStyle))
+      ? roomStyle
+      : null;
+    const safeStyle = explicitStyle ?? 'modern';
+    // budget — только число, защита от объектов/строк-инъекций
+    const safeBudget = (typeof budget === 'number' && budget > 0 && budget < 100_000_000)
+      ? budget
+      : null;
+
+    // 6. promptGuard на query — попадает напрямую в YandexGPT prompt в enrichWithYandexGPT
     const guard = guardPrompt(query);
     if (!guard.allowed) {
       console.warn('[guard] marketplace query rejected', JSON.stringify({
@@ -134,22 +154,36 @@ export const handler = async (event, context) => {
       return buildResponse(400, { error: 'Content policy violation' });
     }
 
-    // 6. Secrets + параллельный поиск по двум маркетплейсам.
+    // 7. Источник товаров — фичефлаг CATALOG_SOURCE (B2):
+    //    'partner' → каталог YDB; иначе Apify (фолбэк на cold start).
     await getSecrets();
 
-    const actorInput = { search: query, maxItems: MAX_ITEMS_PER_SOURCE, proxy: { useApifyProxy: true } };
+    let products;
+    let marketplace_sources;
 
-    // Один упавший актор не валит весь запрос.
-    const [wbResult, ozonResult] = await Promise.allSettled([
-      runActor(WILDBERRIES_ACTOR, actorInput, ACTOR_OPTIONS),
-      runActor(OZON_ACTOR, actorInput, ACTOR_OPTIONS),
-    ]);
+    if (process.env.CATALOG_SOURCE === 'partner') {
+      products = await searchPartnerCatalog({
+        query,
+        style: explicitStyle,
+        topK: MAX_RESULTS,
+      });
+      marketplace_sources = { partner: products.length };
+    } else {
+      const actorInput = { search: query, maxItems: MAX_ITEMS_PER_SOURCE, proxy: { useApifyProxy: true } };
 
-    const wbItems = settledItems(wbResult, 'wildberries');
-    const ozonItems = settledItems(ozonResult, 'ozon');
+      // Один упавший актор не валит весь запрос.
+      const [wbResult, ozonResult] = await Promise.allSettled([
+        runActor(WILDBERRIES_ACTOR, actorInput, ACTOR_OPTIONS),
+        runActor(OZON_ACTOR, actorInput, ACTOR_OPTIONS),
+      ]);
 
-    // Нормализация к общему формату.
-    let products = [...normalizeWildberries(wbItems), ...normalizeOzon(ozonItems)];
+      const wbItems = settledItems(wbResult, 'wildberries');
+      const ozonItems = settledItems(ozonResult, 'ozon');
+
+      // Нормализация к общему формату.
+      products = [...normalizeWildberries(wbItems), ...normalizeOzon(ozonItems)];
+      marketplace_sources = { wildberries: wbItems.length, ozon: ozonItems.length };
+    }
 
     // Фильтр по бюджету (safeBudget уже провалидирован выше).
     if (safeBudget) {
@@ -157,10 +191,9 @@ export const handler = async (event, context) => {
     }
     products = products.slice(0, MAX_RESULTS);
 
-    const marketplace_sources = { wildberries: wbItems.length, ozon: ozonItems.length };
     const rateLimit = { remaining: rateInfo.remaining, resetInMs: RATE_WINDOW_MS };
 
-    // Оба источника пусты — понятный ответ, без ошибки.
+    // Источники пусты — понятный ответ, без ошибки.
     if (products.length === 0) {
       return buildResponse(200, {
         products: [],
