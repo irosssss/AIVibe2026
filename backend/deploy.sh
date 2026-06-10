@@ -67,6 +67,15 @@ deploy() {
   local name="$1" entrypoint="$2" memory="$3" timeout="$4" srcdir="$5"
   echo "→ Пакую и деплою $name ..."
 
+  # В свежем облаке функции ещё нет — version create падает. Создаём идемпотентно.
+  if ! yc serverless function get "$name" --folder-id "$YC_FOLDER_ID" >/dev/null 2>&1; then
+    echo "  функция $name не найдена — создаю"
+    yc serverless function create --name "$name" --folder-id "$YC_FOLDER_ID" >/dev/null
+    # Публичный вызов по HTTP: авторизация — APP_TOKEN внутри самой функции
+    # (health и вебхук ЮKassa токена не требуют by design).
+    yc serverless function allow-unauthenticated-invoke "$name" --folder-id "$YC_FOLDER_ID" >/dev/null
+  fi
+
   ( cd "$srcdir" && zip -qr "$BUILD_DIR/$name.zip" . )
 
   yc serverless function version create \
