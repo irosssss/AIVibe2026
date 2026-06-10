@@ -220,6 +220,21 @@ test('handler resolve: неизвестный артикул → 404', async () 
     assert.equal(res.statusCode, 404);
 });
 
+test('handler: заголовок X-App-Token в каноническом регистре принимается', async () => {
+    // Yandex Cloud нормализует имена заголовков — прямой lookup по 'x-app-token'
+    // давал 403 при верном токене (вскрылось на первом реальном деплое).
+    process.env.CATALOG_SOURCE = 'partner';
+    mockYdb([{ Items: [] }]);
+
+    const res = await handler({
+        httpMethod: 'POST',
+        headers: { 'X-App-Token': APP_TOKEN },
+        body: JSON.stringify({ query: 'диван', userId: 'u-header-case' }),
+    });
+
+    assert.equal(res.statusCode, 200);
+});
+
 test('handler resolve: без article → 400', async () => {
     mockYdb([{}]);
 

@@ -20,6 +20,7 @@
 import { createPayment, getPayment, isConfigured, YooKassaError } from '../../shared/yookassa.js';
 import { ydbClient } from '../../shared/ydb-client.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+import { getHeader } from '../../shared/http-headers.js';
 
 const APP_TOKEN_HEADER = 'x-app-token';
 const MAX_USER_ID_LENGTH = 64;
@@ -240,8 +241,7 @@ export const handler = async (event) => {
         }
 
         // Остальные маршруты — только от приложения (X-App-Token).
-        const appToken = event.headers?.[APP_TOKEN_HEADER]
-            || event.headers?.['X-App-Token'];
+        const appToken = getHeader(event, APP_TOKEN_HEADER);
         const expectedToken = process.env.APP_TOKEN;
         if (!expectedToken || appToken !== expectedToken) {
             return buildResponse(403, { error: 'Forbidden: invalid App Token' });

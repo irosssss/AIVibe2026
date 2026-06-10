@@ -17,6 +17,7 @@ import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
 import { searchPartnerCatalog, resolveArticle } from '../../shared/partner-catalog.js';
+import { getHeader } from '../../shared/http-headers.js';
 
 // Вторичный лимит по IP (#17) — backstop против ротации userId в теле запроса.
 const ipLimiter = createRateLimiter({ max: 60 });
@@ -79,8 +80,7 @@ export const handler = async (event, context) => {
     }
 
     // 1. APP_TOKEN check
-    const appToken = event.headers?.[APP_TOKEN_HEADER]
-                  || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+    const appToken = getHeader(event, APP_TOKEN_HEADER);
     const expectedToken = process.env.APP_TOKEN;
     if (!expectedToken || appToken !== expectedToken) {
       return buildResponse(403, { error: 'Forbidden: invalid App Token' });

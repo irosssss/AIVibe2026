@@ -9,6 +9,7 @@ import * as blockedUsers from './blockedUsers.js';
 import { triplexFallback, circuitStatus, circuitReset, clearCache, cacheSize } from './shared/triplex-fallback.js';
 import { enrichPromptWithRAG } from './shared/rag-search.js';
 import { selectModel } from './shared/model-router.js';
+import { getHeader } from './shared/http-headers.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -71,10 +72,7 @@ export const handler = async (event, context) => {
     const method = event.httpMethod;
 
     // ── 0. Request ID (генерируем или берём из заголовка) ──────────
-    const requestId =
-        event.headers?.[REQUEST_ID_HEADER] ||
-        event.headers?.[REQUEST_ID_HEADER.toLowerCase()] ||
-        crypto.randomUUID();
+    const requestId = getHeader(event, REQUEST_ID_HEADER) || crypto.randomUUID();
 
     /** Лог с единым контекстом для всего запроса */
     const log = (level, msg, extra = {}) => {
@@ -143,8 +141,7 @@ export const handler = async (event, context) => {
     }
 
     // ── 3. Валидация App Token ───────────────────────────────────
-    const appToken = event.headers?.[APP_TOKEN_HEADER]
-                  || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+    const appToken = getHeader(event, APP_TOKEN_HEADER);
 
     const expectedToken = process.env.APP_TOKEN;
     if (!expectedToken || appToken !== expectedToken) {
@@ -271,9 +268,8 @@ export const handler = async (event, context) => {
  */
 function handleAdminApi(event, path, method, requestId) {
     // Validate Admin Token (can be same as APP_TOKEN or separate)
-    const adminToken = event.headers?.[APP_TOKEN_HEADER]
-                    || event.headers?.[APP_TOKEN_HEADER.toLowerCase()]
-                    || event.headers?.['x-admin-token'];
+    const adminToken = getHeader(event, APP_TOKEN_HEADER)
+                    || getHeader(event, 'x-admin-token');
     const expectedToken = process.env.APP_TOKEN;
     if (!adminToken || adminToken !== expectedToken) {
         console.warn('[security] Invalid admin token attempt', { path: (path || '').slice(0, 32) });
