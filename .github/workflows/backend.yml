@@ -26,7 +26,7 @@ on:
 
 jobs:
   syntax-and-tests:
-    name: Node 20 — syntax + tests
+    name: Node 22 — syntax + tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,10 +35,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Syntax check (node --check)
         # Прогоняем все .js файлы в backend, кроме node_modules.
@@ -50,7 +50,7 @@ jobs:
             -print0 | xargs -0 -n1 node --check
 
       - name: Run tests (node --test)
-        # Node 20 имеет встроенный test runner — не нужны зависимости (jest/mocha).
+        # Node 22 имеет встроенный test runner — не нужны зависимости (jest/mocha).
         run: node --test
 
   deploy:

@@ -83,7 +83,7 @@ deploy() {
   yc serverless function version create \
     --folder-id "$YC_FOLDER_ID" \
     --function-name "$name" \
-    --runtime nodejs20 \
+    --runtime nodejs22 \
     --entrypoint "$entrypoint" \
     --memory "$memory" \
     --execution-timeout "$timeout" \
