@@ -86,15 +86,15 @@ test('callYandexGPT: lite → modelUri yandexgpt-lite, pro по умолчани
     const defaultResult = await callYandexGPT({ prompt: 'тест default' });
 
     assert.match(completions[0].modelUri, /\/yandexgpt-lite\/latest$/);
-    assert.match(completions[1].modelUri, /\/yandexgpt-5\/latest$/);
+    assert.match(completions[1].modelUri, /\/yandexgpt\/latest$/);
     assert.equal(liteResult.model, 'yandexgpt-lite');
-    assert.equal(defaultResult.model, 'yandexgpt-5');
+    assert.equal(defaultResult.model, 'yandexgpt');
 });
 
 test('callYandexGPT: неизвестное значение model → безопасный fallback на pro', async () => {
     const completions = mockCompletionBackend();
     await callYandexGPT({ prompt: 'тест', model: 'turbo' });
-    assert.match(completions[0].modelUri, /\/yandexgpt-5\/latest$/);
+    assert.match(completions[0].modelUri, /\/yandexgpt\/latest$/);
 });
 
 // ─── B7.3: проброс model/usage через triplex ─────────────────────

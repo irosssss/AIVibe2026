@@ -1,6 +1,6 @@
 // yandexgpt.js — Клиент YandexGPT для Yandex Cloud Functions
 // Endpoint: https://llm.api.cloud.yandex.net/foundationModels/v1/completion
-// Модель: gpt://{folder-id}/yandexgpt-5/latest
+// Модель: gpt://{folder-id}/yandexgpt/latest (флагман 5-го поколения; имени «yandexgpt-5» в API нет)
 // Auth: IAM-токен из metadata service (свежий токен без ручного обновления).
 
 import { getSecrets } from './secrets.js';
@@ -58,7 +58,7 @@ export async function getIamToken() {
 // B7.2: гибрид Lite+Pro. Решение, какую модель брать, принимает роутер
 // (shared/model-router.js) — здесь только маппинг на имя модели Яндекса.
 const GPT_MODELS = {
-    pro: 'yandexgpt-5',
+    pro: 'yandexgpt',
     lite: 'yandexgpt-lite',
 };
 
