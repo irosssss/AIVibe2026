@@ -36,8 +36,10 @@ Carthage/Build/
 
 ## Swift Package Manager
 .build/
-# Package.resolved НЕ игнорируем — коммитим для воспроизводимых сборок (пин версий).
-# Xcode генерирует свой в AIVibeApp/.../xcshareddata/swiftpm/Package.resolved.
+# Корневой Package.resolved НЕ игнорируем — коммитим для воспроизводимых сборок (пин версий).
+# А копию, которую Xcode генерирует внутри проекта приложения, игнорируем:
+# она самовольно подтягивает более новые версии и расходится с корневым пином.
+AIVibeApp/AIVibeApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 ## Environment files
 .env
