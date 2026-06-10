@@ -1,12 +1,12 @@
 # Code Complexity Report
 
-Generated: 2026-05-26T07:26:23.471Z
+Generated: 2026-06-10T06:25:36.559Z
 Script: `scripts/code-complexity-analyzer.mjs`
 
 ## Сводка
 
-- ✅ OK: 6
-- ⚠️  WARN: 1
+- ✅ OK: 7
+- ⚠️  WARN: 0
 - ⏭  Skipped (файлы не найдены): 0
 
 ## Проверки
@@ -17,7 +17,7 @@ Script: `scripts/code-complexity-analyzer.mjs`
 | 2 | Multi-pass parsing | ✅ OK |
 | 3 | Backend entry points use shared fallback | ✅ OK |
 | 4 | RAG indexer N+1 | ✅ OK |
-| 5 | RAG search full scan | ⚠️ WARN |
+| 5 | RAG search full scan | ✅ OK |
 | 6 | Analytics event loss | ✅ OK |
 | 7 | Retry-After handling | ✅ OK |
 
@@ -25,14 +25,14 @@ Script: `scripts/code-complexity-analyzer.mjs`
 
 | Размер | Путь |
 |--------|------|
-| 47.5 KB | `AIVibeTests/AI/Integration/AgentIntegrationTests.swift` |
-| 41.1 KB | `AIVibeTests/AI/AgentLoopTests.swift` |
-| 35.2 KB | `AIVibe/Core/AI/ToolRegistry/Tools/GenerateArrangementTool.swift` |
-| 28.5 KB | `AIVibe/Core/AI/ToolRegistry/Tools/RecommendStyleTool.swift` |
-| 27.1 KB | `AIVibe/Core/AI/Agent/AgentLoop.swift` |
-| 25.9 KB | `AIVibe/Core/AI/Agent/AgentObservability.swift` |
-| 22.8 KB | `AIVibe/Core/AI/Agent/ContextBuilder.swift` |
-| 19.8 KB | `AIVibe/Core/AI/ToolRegistry/Tools/DraftShoppingListTool.swift` |
+| 47.4 KB | `AIVibeTests/AI/Integration/AgentIntegrationTests.swift` |
+| 40.7 KB | `AIVibeTests/AI/AgentLoopTests.swift` |
+| 35.4 KB | `AIVibe/Core/AI/ToolRegistry/Tools/GenerateArrangementTool.swift` |
+| 34.9 KB | `AIVibe/Features/RoomScan/RoomScanFlowView.swift` |
+| 28.7 KB | `AIVibe/Core/AI/ToolRegistry/Tools/RecommendStyleTool.swift` |
+| 27.7 KB | `AIVibe/Core/AI/Agent/AgentLoop.swift` |
+| 26.4 KB | `AIVibe/Core/AI/Agent/AgentObservability.swift` |
+| 25.5 KB | `AIVibe/Core/AI/Agent/ContextBuilder.swift` |
 
 ---
 

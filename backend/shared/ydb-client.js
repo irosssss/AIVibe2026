@@ -76,6 +76,31 @@ function fromDynamo(dynamoItem) {
     return obj;
 }
 
+/**
+ * JS-значения → ExpressionAttributeValues с плейсхолдерами ":имя".
+ * Только примитивы: в FilterExpression/KeyConditionExpression сложным типам
+ * делать нечего, а молчаливый JSON.stringify дал бы фильтр, который никогда
+ * не совпадёт.
+ * @param {object} values — например { cat: 'kitchen', wmin: 170 }
+ * @returns {object} — { ':cat': {S:'kitchen'}, ':wmin': {N:'170'} }
+ */
+function toExpressionValues(values) {
+    const out = {};
+    for (const [key, value] of Object.entries(values ?? {})) {
+        const placeholder = key.startsWith(':') ? key : `:${key}`;
+        if (typeof value === 'string') {
+            out[placeholder] = { S: value };
+        } else if (typeof value === 'number') {
+            out[placeholder] = { N: String(value) };
+        } else if (typeof value === 'boolean') {
+            out[placeholder] = { BOOL: value };
+        } else {
+            throw new Error(`toExpressionValues: неподдерживаемый тип для "${key}" (${typeof value})`);
+        }
+    }
+    return out;
+}
+
 // ─── Базовый HTTP-запрос к Document API ──────────────────────────
 
 /**
@@ -158,6 +183,110 @@ export const ydbClient = {
     },
 
     /**
+     * Постраничное сканирование с фильтрацией на стороне YDB (B5/B6).
+     *
+     * Особенность Document API: FilterExpression применяется ПОСЛЕ чтения
+     * порции (до 1MB или pageLimit записей), поэтому метод сам идёт по
+     * страницам через LastEvaluatedKey, пока не наберёт targetCount
+     * подходящих записей, не упрётся в maxPages или в конец таблицы.
+     *
+     * Все имена атрибутов в выражениях передавайте через names (#алиасы):
+     * у DynamoDB-синтаксиса длинный список зарезервированных слов (name,
+     * size, ...), алиасы снимают проблему целиком.
+     *
+     * @param {string} tableName
+     * @param {object} opts
+     * @param {string} [opts.filterExpression] — например '#category = :cat OR #category = :gen'
+     * @param {object} [opts.values] — JS-значения плейсхолдеров: { cat: 'kitchen', gen: 'general' }
+     * @param {object} [opts.names] — алиасы атрибутов: { '#category': 'category' }
+     * @param {string} [opts.projection] — ProjectionExpression: '#id, #content'
+     * @param {number} [opts.pageLimit=100] — записей СКАНИРУЕТСЯ за страницу (фильтр — после)
+     * @param {number} [opts.maxPages=8] — потолок страниц (ограничивает худший случай)
+     * @param {number} [opts.targetCount=50] — досрочный выход, когда кандидатов достаточно
+     * @returns {Promise<object[]>}
+     */
+    async scanFiltered(tableName, opts = {}) {
+        const {
+            filterExpression,
+            values,
+            names,
+            projection,
+            pageLimit = 100,
+            maxPages = 8,
+            targetCount = 50,
+        } = opts;
+
+        const collected = [];
+        let exclusiveStartKey;
+
+        for (let page = 0; page < maxPages; page++) {
+            const body = { TableName: tableName, Limit: pageLimit };
+            if (filterExpression) {
+                body.FilterExpression = filterExpression;
+                body.ExpressionAttributeValues = toExpressionValues(values);
+            }
+            if (names) body.ExpressionAttributeNames = names;
+            if (projection) body.ProjectionExpression = projection;
+            if (exclusiveStartKey) body.ExclusiveStartKey = exclusiveStartKey;
+
+            const res = await dynamoRequest('Scan', body);
+            if (!res) return collected; // YDB не настроен — graceful, отдаём что есть
+
+            collected.push(...(res.Items ?? []).map(fromDynamo));
+            exclusiveStartKey = res.LastEvaluatedKey;
+            if (!exclusiveStartKey || collected.length >= targetCount) break;
+        }
+        return collected;
+    },
+
+    /**
+     * Query по ключу или глобальному вторичному индексу (B5).
+     * В отличие от Scan читает только записи, попавшие под условие ключа, —
+     * для таблиц, где партиционный ключ совпадает с осью поиска (например,
+     * products по индексу category).
+     *
+     * @param {string} tableName
+     * @param {object} opts
+     * @param {string} opts.keyConditionExpression — например '#category = :cat'
+     * @param {object} opts.values — JS-значения плейсхолдеров
+     * @param {object} [opts.names] — алиасы атрибутов
+     * @param {string} [opts.filterExpression] — доп. фильтр по неключевым атрибутам
+     * @param {string} [opts.projection]
+     * @param {string} [opts.indexName] — имя глобального вторичного индекса
+     * @param {number} [opts.limit=100]
+     * @returns {Promise<object[]>}
+     */
+    async query(tableName, opts = {}) {
+        const {
+            keyConditionExpression,
+            values,
+            names,
+            filterExpression,
+            projection,
+            indexName,
+            limit = 100,
+        } = opts;
+        if (!keyConditionExpression) {
+            throw new Error('ydbClient.query: keyConditionExpression обязателен');
+        }
+
+        const body = {
+            TableName: tableName,
+            KeyConditionExpression: keyConditionExpression,
+            ExpressionAttributeValues: toExpressionValues(values),
+            Limit: limit,
+        };
+        if (filterExpression) body.FilterExpression = filterExpression;
+        if (names) body.ExpressionAttributeNames = names;
+        if (projection) body.ProjectionExpression = projection;
+        if (indexName) body.IndexName = indexName;
+
+        const res = await dynamoRequest('Query', body);
+        if (!res) return [];
+        return (res.Items ?? []).map(fromDynamo);
+    },
+
+    /**
      * Удалить запись по первичному ключу.
      */
     async deleteItem(tableName, keyName, keyValue) {
@@ -183,4 +312,4 @@ export async function ydbHealthCheck() {
     }
 }
 
-export { toDynamo, fromDynamo };
+export { toDynamo, fromDynamo, toExpressionValues };
