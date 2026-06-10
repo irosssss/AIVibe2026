@@ -24,6 +24,8 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
     public let aiProvider: String      // "YandexGPT · design_advisor"
     public let description: String
     public let photoTone: AIPhotoTone
+    /// USDZ-файл в бандле — hero-блок становится интерактивным 3D-просмотром.
+    public let usdzFile: String?
 
     public init(
         market: AIMarket,
@@ -42,7 +44,8 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         aiCommentary: String,
         aiProvider: String,
         description: String,
-        photoTone: AIPhotoTone = .sand
+        photoTone: AIPhotoTone = .sand,
+        usdzFile: String? = nil
     ) {
         self.market = market
         self.brand = brand
@@ -61,6 +64,7 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         self.aiProvider = aiProvider
         self.description = description
         self.photoTone = photoTone
+        self.usdzFile = usdzFile
     }
 
     /// Демо-карточка для разработки и preview.
@@ -79,7 +83,8 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         aiCommentary: "Этот диван подходит к скандинавскому стилю вашей гостиной. Светлая льняная обивка визуально расширит пространство. Подушки можно стирать.",
         aiProvider: "YandexGPT · design_advisor",
         description: "Угловой диван-кровать с механизмом «дельфин». Обивка — лён 80%, хлопок 20%, плотность 230 г/м². Каркас из массива берёзы, наполнение — пружинный блок Bonnel плюс холлофайбер.",
-        photoTone: .sand
+        photoTone: .sand,
+        usdzFile: "sofa.usdz"
     )
 }
 

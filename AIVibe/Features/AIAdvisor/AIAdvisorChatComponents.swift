@@ -15,13 +15,13 @@ struct ChatTopBar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {} label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(c.terracotta)
-                }
-                .buttonStyle(.plain)
-                .frame(width: 40, alignment: .leading)
+                // Чат — корневой таб, «назад» некуда. Декоративная иконка
+                // вместо кнопки-пустышки (тап по ней выглядел как зависание).
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(c.terracotta)
+                    .frame(width: 40, alignment: .leading)
+                    .accessibilityHidden(true)
 
                 Spacer()
 
@@ -303,7 +303,13 @@ struct InlineFurnitureRow: View {
                     } label: {
                         VStack(spacing: 8) {
                             ZStack(alignment: .topLeading) {
-                                PhotoSlot(tone: it.tone, cornerRadius: 10, aspectRatio: 4.0/3.0)
+                                ModelPhoto(
+                                    usdzFile: it.article
+                                        .flatMap { PartnerCatalogStub.item(article: $0)?.usdzFile },
+                                    tone: it.tone,
+                                    cornerRadius: 10,
+                                    aspectRatio: 4.0 / 3.0
+                                )
                                 MarketBadge(it.market).padding(6)
                             }
 

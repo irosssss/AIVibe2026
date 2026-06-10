@@ -124,25 +124,49 @@ public struct ProductDetailView: View {
 
     private var heroPhoto: some View {
         ZStack(alignment: .bottom) {
-            PhotoSlot(
-                tone: store.product.photoTone,
-                label: "фото товара · \(store.product.market.label.lowercased())",
-                cornerRadius: 0,
-                aspectRatio: nil
-            )
-            .frame(height: 384)
+            if let usdzFile = store.product.usdzFile {
+                // Живая 3D-модель из каталога фабрики: вращение/зум пальцем.
+                Model3DView(usdzFile: usdzFile)
+                    .frame(height: 384)
+                    .background(
+                        LinearGradient(
+                            colors: scheme == .dark
+                                ? [Color(hex: 0x26221C), Color(hex: 0x1A1814)]
+                                : [Color(hex: 0xFAF6EF), Color(hex: 0xEFEAE1)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
 
-            // Точки-страницы — по центру снизу.
-            HStack(spacing: 6) {
-                ForEach(0..<5, id: \.self) { i in
-                    Capsule()
-                        .fill(i == store.currentPage
-                              ? Color.white.opacity(0.95)
-                              : Color.white.opacity(0.45))
-                        .frame(width: i == store.currentPage ? 18 : 6, height: 6)
+                Chip(background: scheme == .dark
+                        ? Color.black.opacity(0.45)
+                        : Color.white.opacity(0.85),
+                     foreground: c.onSurfaceMuted,
+                     horizontalPadding: 10, verticalPadding: 5) {
+                    Label("3D — вращайте пальцем", systemImage: "rotate.3d")
+                        .font(.system(size: 12, weight: .medium))
                 }
+                .padding(.bottom, 16)
+            } else {
+                PhotoSlot(
+                    tone: store.product.photoTone,
+                    label: "фото товара · \(store.product.market.label.lowercased())",
+                    cornerRadius: 0,
+                    aspectRatio: nil
+                )
+                .frame(height: 384)
+
+                // Точки-страницы — по центру снизу.
+                HStack(spacing: 6) {
+                    ForEach(0..<5, id: \.self) { i in
+                        Capsule()
+                            .fill(i == store.currentPage
+                                  ? Color.white.opacity(0.95)
+                                  : Color.white.opacity(0.45))
+                            .frame(width: i == store.currentPage ? 18 : 6, height: 6)
+                    }
+                }
+                .padding(.bottom, 16)
             }
-            .padding(.bottom, 16)
         }
         // Бэйдж маркетплейса — нижний левый угол фото. Раньше он стоял в
         // верхнем левом углу и перекрывался плавающей кнопкой «Назад» (#1a).

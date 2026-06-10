@@ -102,8 +102,14 @@ struct ContentView: View {
                         if let plan = pendingDesignPlan, let geo = pendingRoomGeometry {
                             ARDesignerScreen(
                                 designPlan: plan,
-                                roomGeometry: geo
+                                roomGeometry: geo,
+                                // Крестик на корневом AR-табе: уходим на главную
+                                // (раньше тап не делал ничего).
+                                onClose: { selectedTab = .home }
                             )
+                            // Store создаётся один раз на identity вью —
+                            // новый план должен пересоздать экран.
+                            .id(plan.id)
                         } else {
                             ARDesignerEmptyState {
                                 selectedTab = .scan
@@ -118,7 +124,22 @@ struct ContentView: View {
                 .tag(Tab.ar)
             }
             .tint(AIColors.light.terracotta)
+            .onAppear { openDemoProductIfRequested() }
         }
+    }
+
+    /// `-DemoProduct <артикул>` — скриптовые скриншоты (как `-StartTab`):
+    /// открывает карточку товара из демо-каталога фабрик сразу при запуске.
+    private func openDemoProductIfRequested() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "-DemoProduct"), idx + 1 < args.count,
+              let catalogItem = PartnerCatalogStub.item(article: args[idx + 1]) else {
+            return
+        }
+        selectedTab = .chat
+        chatPath.append(AppRoute.productDetail(productFor(
+            ChatFurnitureItem(catalogItem: catalogItem)
+        )))
     }
 
     // MARK: - Tab selection binding (pop-to-root on re-tap)
@@ -178,6 +199,9 @@ struct ContentView: View {
                         roomGeometry: geo,
                         onClose: { pop(path) }
                     )
+                    // Store создаётся один раз на identity вью —
+                    // новый план должен пересоздать экран.
+                    .id(plan.id)
                 } else {
                     ARDesignerEmptyState {
                         pop(path)
@@ -214,26 +238,27 @@ struct ContentView: View {
 
     // MARK: - Mock conversion
 
-    /// Inline-карточка чата → mock `ProductDetail` для push'а.
-    /// При подключении backend заменим на загрузку из MarketplaceClient.
+    /// Inline-карточка чата → `ProductDetail` из демо-каталога фабрик.
+    /// При подключении B4 данные придут из живого каталога по артикулу.
     private func productFor(_ item: ChatFurnitureItem) -> ProductDetail {
-        let firstPart = item.title.split(separator: ",").first.map(String.init) ?? item.title
-        let brand = "IKEA · " + firstPart.trimmingCharacters(in: .whitespaces)
+        let catalogItem = item.article.flatMap { PartnerCatalogStub.item(article: $0) }
         return ProductDetail(
             market: item.market,
-            brand: brand,
+            brand: catalogItem.map { "Фабрика «\($0.factory)» · арт. \($0.article)" }
+                ?? "Фабрика-партнёр",
             title: item.title,
             price: item.price,
-            oldPrice: item.price + 11_000,
-            discountPercent: 19,
             rating: 4.8, reviews: 124,
-            width: 240, depth: 95, height: 82,
+            width: catalogItem?.widthCm ?? 240,
+            depth: catalogItem?.depthCm ?? 95,
+            height: catalogItem?.heightCm ?? 82,
             fitVerdict: "Помещается в вашу гостиную",
             fitDetail: "Займёт 58% свободного места у окна",
             aiCommentary: "Эта модель хорошо вписывается в выбранный стиль и помещается по габаритам.",
             aiProvider: "YandexGPT · design_advisor",
-            description: "Описание товара будет загружено с маркетплейса при подключении backend.",
-            photoTone: item.tone
+            description: "Характеристики и материалы загрузятся из каталога фабрики при подключении живого каталога (B4).",
+            photoTone: item.tone,
+            usdzFile: catalogItem?.usdzFile
         )
     }
 }

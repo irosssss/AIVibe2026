@@ -8,34 +8,37 @@ import SwiftUI
 // MARK: - Public entry
 
 public struct ARDesignerScreen: View {
-    private let designPlan: RoomDesignPlan
-    private let roomGeometry: RoomGeometry
     private let onClose: () -> Void
+
+    /// One-time store creation через StoreHost — Store, созданный прямо в
+    /// `body`, пересоздавался при каждом re-render родителя и сбрасывал
+    /// всё состояние AR (подборку, выбор, шторку). Новый план → новый
+    /// экран через `.id(plan.id)` на стороне вызывающего.
+    @StateObject private var host: StoreHost<ARDesignerFeature>
 
     public init(
         designPlan: RoomDesignPlan,
         roomGeometry: RoomGeometry,
         onClose: @escaping () -> Void = {}
     ) {
-        self.designPlan = designPlan
-        self.roomGeometry = roomGeometry
         self.onClose = onClose
+        _host = StateObject(wrappedValue: StoreHost(
+            Store(
+                initialState: ARDesignerFeature.State(
+                    designPlan: designPlan,
+                    roomGeometry: roomGeometry,
+                    roomTitle: Self.buildRoomTitle(geometry: roomGeometry)
+                )
+            ) { ARDesignerFeature() }
+        ))
     }
 
     public var body: some View {
-        let store = Store(
-            initialState: ARDesignerFeature.State(
-                designPlan: designPlan,
-                roomGeometry: roomGeometry,
-                roomTitle: buildRoomTitle(geometry: roomGeometry)
-            )
-        ) { ARDesignerFeature() }
-
-        ARDesignerView(store: store, onClose: onClose)
+        ARDesignerView(store: host.store, onClose: onClose)
             .navigationBarBackButtonHidden(true)
     }
 
-    private func buildRoomTitle(geometry: RoomGeometry) -> String {
+    private static func buildRoomTitle(geometry: RoomGeometry) -> String {
         let area = Int(geometry.area)
         return "Комната · \(area) м²"
     }
@@ -115,13 +118,6 @@ struct ARDesignerView: View {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
 
-            // Coaching overlay: показываем пока anchor не найден на реальном
-            // устройстве. На симуляторе AR-tracking недоступен — overlay не
-            // показываем (там декоративный gradient вместо камеры).
-            #if !targetEnvironment(simulator)
-            coachingOverlay
-            #endif
-
             GeometryReader { geo in
                 let w = geo.size.width
                 let h = geo.size.height
@@ -152,50 +148,29 @@ struct ARDesignerView: View {
                 Spacer()
             }
 
-            VStack(spacing: 0) {
+            // Единый нижний стек: статусные плашки → FAB → бюджет → шторка.
+            // Раньше каждый блок был отдельным оверлеем с «угаданным» отступом
+            // (sheetHeight + N) — при несовпадении реальной высоты шторки
+            // элементы наезжали друг на друга.
+            VStack(spacing: 12) {
                 Spacer()
-                ARBudgetBar(
-                    total: store.totalPrice,
-                    max: store.budgetMax,
-                    ratio: store.budgetRatio
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
 
-                ARFurnitureSheet(
-                    items: store.items,
-                    prices: store.prices,
-                    selectedID: store.selectedItemID,
-                    mode: store.sheetMode,
-                    total: store.totalPrice,
-                    isRefining: store.isRefining,
-                    onToggle: {
-                        Haptics.selection()
-                        store.send(.sheetToggled)
-                    },
-                    onSelect: { id in
-                        Haptics.light()
-                        store.send(.itemTapped(id))
-                        sceneBridge.liveSelection(store.selectedItemID == id ? nil : id)
-                    },
-                    onRemove: { id in
-                        Haptics.warning()
-                        sceneBridge.liveRemove(id: id)
-                        store.send(.removeItem(id))
-                    },
-                    onRefine: {
-                        Haptics.medium()
-                        store.send(.refineTapped)
-                    },
-                    onCheckout: {
-                        Haptics.medium()
-                        store.send(.addToCartTapped)
-                    }
-                )
-            }
+                // Coaching: показываем пока anchor не найден на реальном
+                // устройстве. На симуляторе AR-tracking недоступен — плашку
+                // не показываем (там декоративный gradient вместо камеры).
+                #if !targetEnvironment(simulator)
+                coachingStatus
+                #endif
 
-            VStack {
-                Spacer()
+                if let error = store.refineError {
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(Color.red.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
+                        .padding(.horizontal, 16)
+                }
+
                 HStack {
                     Spacer()
                     Button {
@@ -213,19 +188,46 @@ struct ARDesignerView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, sheetHeight + 88)
-            }
 
-            if let error = store.refineError {
-                VStack {
-                    Spacer()
-                    Text(error)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(Color.red.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, sheetHeight + 160)
+                VStack(spacing: 0) {
+                    ARBudgetBar(
+                        total: store.totalPrice,
+                        max: store.budgetMax,
+                        ratio: store.budgetRatio
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+
+                    ARFurnitureSheet(
+                        items: store.items,
+                        prices: store.prices,
+                        selectedID: store.selectedItemID,
+                        mode: store.sheetMode,
+                        total: store.totalPrice,
+                        isRefining: store.isRefining,
+                        onToggle: {
+                            Haptics.selection()
+                            store.send(.sheetToggled)
+                        },
+                        onSelect: { id in
+                            Haptics.light()
+                            store.send(.itemTapped(id))
+                            sceneBridge.liveSelection(store.selectedItemID == id ? nil : id)
+                        },
+                        onRemove: { id in
+                            Haptics.warning()
+                            sceneBridge.liveRemove(id: id)
+                            store.send(.removeItem(id))
+                        },
+                        onRefine: {
+                            Haptics.medium()
+                            store.send(.refineTapped)
+                        },
+                        onCheckout: {
+                            Haptics.medium()
+                            store.send(.addToCartTapped)
+                        }
+                    )
                 }
             }
         }
@@ -307,43 +309,35 @@ struct ARDesignerView: View {
         }
     }
 
-    // MARK: - Coaching overlay (поиск пола)
+    // MARK: - Coaching status (поиск пола)
 
     @ViewBuilder
-    private var coachingOverlay: some View {
+    private var coachingStatus: some View {
         switch anchorState {
         case .anchored:
             EmptyView()
         case .searching:
-            VStack {
-                Spacer()
-                HStack(spacing: 10) {
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 18, weight: .medium))
-                    Text("Наведите камеру на пол")
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(.bottom, sheetHeight + 100)
+            HStack(spacing: 10) {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 18, weight: .medium))
+                Text("Наведите камеру на пол")
+                    .font(.system(size: 14, weight: .medium))
             }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: Capsule())
             .allowsHitTesting(false)
             .accessibilityElement()
             .accessibilityLabel("Наведите камеру на пол для размещения мебели")
         case .unavailable(let message):
-            VStack {
-                Spacer()
-                Text(message)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding(12)
-                    .background(Color.orange.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, sheetHeight + 160)
-            }
-            .allowsHitTesting(false)
+            Text(message)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(12)
+                .background(Color.orange.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 16)
+                .allowsHitTesting(false)
         }
     }
 
@@ -468,10 +462,6 @@ struct ARDesignerView: View {
         let title = furnitureDisplayTitle(item)
         let dims = furnitureSubtitle(item)
         return "\(title), \(dims)"
-    }
-
-    private var sheetHeight: CGFloat {
-        store.sheetMode == .expanded ? 540 : 280
     }
 
     private var approvalBinding: Binding<Bool> {

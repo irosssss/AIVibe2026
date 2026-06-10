@@ -56,11 +56,12 @@ struct AIAdvisorChatView: View {
                 } else {
                     activeContent
                 }
-
-                VStack {
-                    ChatTopBar(skill: currentSkill, thinking: isThinking)
-                    Spacer()
-                }
+            }
+            // Шапка как top-inset, а не оверлей поверх контента: контент
+            // больше не подгоняется «на глаз» жёсткими отступами и не
+            // наезжает на шапку.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                ChatTopBar(skill: currentSkill, thinking: isThinking)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Composer(
@@ -73,6 +74,15 @@ struct AIAdvisorChatView: View {
             .task {
                 // Загружаем сохранённую историю чата при открытии экрана (B1).
                 store.send(.onAppear)
+
+                // `-DemoChat` — скриптовые скриншоты (как `-StartTab`):
+                // автоматически отправляет вопрос, чтобы получить ответ
+                // и подборку из демо-каталога без ручного ввода.
+                if ProcessInfo.processInfo.arguments.contains("-DemoChat"),
+                   store.chatMessages.isEmpty {
+                    store.currentInput = "Подбери диван до 70 000 ₽"
+                    sendMessage()
+                }
             }
             .onChange(of: store.chatMessages.count) { _, count in
                 startStreamingIfNeeded(count: count)
@@ -89,6 +99,13 @@ struct AIAdvisorChatView: View {
                     ]
                 default:
                     toolCalls = []
+                    // После первого ответа AI показываем подборку из
+                    // демо-каталога фабрик (заменится результатами B4).
+                    if !store.chatMessages.isEmpty, inlineFurniture.isEmpty {
+                        inlineFurniture = PartnerCatalogStub
+                            .chatShowcase(budgetRub: budget?.max)
+                            .map(ChatFurnitureItem.init(catalogItem:))
+                    }
                 }
             }
         }
@@ -99,6 +116,11 @@ struct AIAdvisorChatView: View {
     /// Запускает стриминг для последнего AI-сообщения, если оно новое.
     private func startStreamingIfNeeded(count: Int) {
         guard count > 0 else { return }
+        // Стримим только живой ответ (phase == .result после chatResponseReceived /
+        // aiResponseReceived). История, восстановленная при открытии экрана
+        // (phase == .idle), показывается сразу — иначе последний ответ AI
+        // «перепечатывался» заново при каждом запуске.
+        guard store.phase == .result else { return }
         let last = store.chatMessages[count - 1]
         guard !last.isUser else { return }
         streamingMessageId = last.id
@@ -202,9 +224,10 @@ struct AIAdvisorChatView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 110)   // под top bar
+            .padding(.top, 24)
             .padding(.bottom, 32)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Active (state 2 + 3)
@@ -267,9 +290,10 @@ struct AIAdvisorChatView: View {
 
                     Color.clear.frame(height: 12).id("bottom")
                 }
-                .padding(.top, 130)   // под top bar (54 status + ~76 chrome)
-                .padding(.bottom, budget == nil ? 16 : 80)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: store.chatMessages.count) { _, _ in
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }
@@ -316,12 +340,32 @@ public struct ChatFurnitureItem: Identifiable, Equatable, Sendable {
     public let price: Int
     public let tone: AIPhotoTone
     public let market: AIMarket
+    /// Артикул каталога фабрик (для карточки товара и 3D-модели).
+    public let article: String?
 
-    public init(title: String, price: Int, tone: AIPhotoTone, market: AIMarket) {
+    public init(
+        title: String,
+        price: Int,
+        tone: AIPhotoTone,
+        market: AIMarket,
+        article: String? = nil
+    ) {
         self.title = title
         self.price = price
         self.tone = tone
         self.market = market
+        self.article = article
+    }
+
+    /// Карточка из позиции демо-каталога фабрик.
+    public init(catalogItem: PartnerCatalogItem) {
+        self.init(
+            title: catalogItem.name,
+            price: catalogItem.priceRub,
+            tone: catalogItem.tone,
+            market: .partner,
+            article: catalogItem.article
+        )
     }
 }
 
