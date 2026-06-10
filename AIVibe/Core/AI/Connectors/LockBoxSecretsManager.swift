@@ -10,24 +10,14 @@ import Logging
 /// Менеджер секретов через Yandex LockBox.
 ///
 /// Хранит API ключи, OAuth токены, client secrets для всех внешних систем.
-///
-/// Blueprint §10:
-/// ```
-/// connector: wildberries_api
-/// auth: Yandex Lockbox (API key)
-///
-/// connector: ozon_api
-/// auth: Yandex Lockbox (API key + Client-ID)
-/// ```
+/// Пивот 2026-06: ключи маркетплейсов (Ozon/WB) удалены — работаем только
+/// с каталогом фабрик-партнёров (docs/BUSINESS_MODEL.md).
 public actor LockBoxSecretsManager {
 
     // MARK: - Secret Keys
 
     /// Ключи секретов в LockBox.
     public enum SecretKey: String, Sendable, CaseIterable {
-        case wildberriesApiKey = "WB_API_KEY"
-        case ozonApiKey = "OZON_API_KEY"
-        case ozonClientId = "OZON_CLIENT_ID"
         case yandexIamToken = "YANDEX_IAM_TOKEN"
         case yandexFolderId = "YANDEX_FOLDER_ID"
         case gigachatClientSecret = "GIGACHAT_CLIENT_SECRET"

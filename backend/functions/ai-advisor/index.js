@@ -6,6 +6,9 @@
 import { triplexFallback } from '../../shared/triplex-fallback.js';
 import { guardPrompt, MAX_PROMPT_LENGTH } from '../../shared/promptGuard.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+import { enrichPromptWithRAG } from '../../shared/rag-search.js';
+import { selectModel } from '../../shared/model-router.js';
+import { getHeader } from '../../shared/http-headers.js';
 
 // Вторичный лимит по IP (#17): userId берётся из тела и его можно ротировать,
 // IP — нет. Порог выше per-user (NAT/общие сети), это backstop против ротации.
@@ -80,8 +83,7 @@ export const handler = async (event, context) => {
         }
 
         // 1. APP_TOKEN check — закрывает unauthenticated abuse (#20 / #14)
-        const appToken = event.headers?.[APP_TOKEN_HEADER]
-                      || event.headers?.[APP_TOKEN_HEADER.toLowerCase()];
+        const appToken = getHeader(event, APP_TOKEN_HEADER);
         const expectedToken = process.env.APP_TOKEN;
         if (!expectedToken || appToken !== expectedToken) {
             return buildResponse(403, { error: 'Forbidden: invalid App Token' });
@@ -147,9 +149,22 @@ export const handler = async (event, context) => {
             });
         }
 
+        // 6. RAG-обогащение (после guard/rate limit, перед LLM).
+        // Сбой или таймаут RAG → исходный промпт, запрос не страдает.
+        const enriched = await enrichPromptWithRAG(prompt);
+        if (enriched.ragChunks > 0) {
+            console.log('[info] RAG context attached', JSON.stringify({
+                _l: 'info', userId: userId.slice(0, 16), ragChunks: enriched.ragChunks,
+            }));
+        }
+
+        // 7. Роутер модели Lite/Pro (B7) — по ИСХОДНОМУ промпту, не обогащённому.
+        const route = selectModel(prompt, { hasImage: Boolean(imageBase64) });
+
         // Единый triplex fallback (Circuit Breaker + кэш — в shared/triplex-fallback.js)
         const result = await triplexFallback({
-            prompt,
+            prompt: enriched.prompt,
+            model: route.model,
             imageBase64,
             timeoutMs: 25000,
             log: (level, msg, extra) => {
@@ -162,9 +177,17 @@ export const handler = async (event, context) => {
 
         const totalLatency = Date.now() - startTime;
 
+        // B7.3: фактическая модель + usage в лог — замер реальной цены запроса.
+        console.log('[info] Response sent', JSON.stringify({
+            _l: 'info', _t: totalLatency, userId: userId.slice(0, 16),
+            provider: result.provider, routedModel: route.model,
+            routeReason: route.reason, model: result.model, usage: result.usage,
+        }).slice(0, 500));
+
         return buildResponse(200, {
             text: result.text,
             provider: result.provider,
+            model: result.model || undefined,
             latency_ms: totalLatency,
             errorLog: result.errorLog.length > 0 ? result.errorLog : undefined,
             circuitSkipped: result.circuitSkipped || undefined,

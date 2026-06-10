@@ -18,7 +18,7 @@ import Logging
 /// 5. [TRUSTED] Skill index: design_advisor, furniture_matcher, budget_optimizer
 /// 6. [TRUSTED] Tool definitions (детерминированный порядок)
 /// 7. [UNTRUSTED → DATA] LiDAR scan metadata (размеры, объекты)
-/// 8. [UNTRUSTED → DATA] Marketplace search results (Wildberries, Ozon)
+/// 8. [UNTRUSTED → DATA] Partner catalog search results (фабрики-партнёры)
 /// 9. [UNTRUSTED → DATA] Style guides and reference images
 /// 10. [UNTRUSTED → DATA] Recent tool observations
 /// 11. [TRUSTED] Current user request + volatile runtime state
@@ -137,7 +137,7 @@ public struct ContextBuilder: Sendable {
             Твои обязанности:
             - Анализировать 3D-сканы комнат (LiDAR USDZ)
             - Рекомендовать стили интерьера на основе анализа пространства
-            - Подбирать мебель с российских маркетплейсов (Wildberries, Ozon)
+            - Подбирать мебель из каталога фабрик-партнёров AIVibe
             - Генерировать планы расстановки мебели в AR
             - Составлять списки покупок в рамках бюджета пользователя
 

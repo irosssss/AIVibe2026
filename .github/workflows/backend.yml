@@ -10,6 +10,7 @@
 name: Backend CI/CD
 
 # Запускается только когда меняются файлы backend/** — чисто iOS-PR не тратят CI время.
+# workflow_dispatch — ручной запуск деплоя с любой ветки (кнопка Run workflow / gh workflow run).
 on:
   push:
     branches: [master, main]
@@ -21,10 +22,11 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
+  workflow_dispatch:
 
 jobs:
   syntax-and-tests:
-    name: Node 20 — syntax + tests
+    name: Node 22 — syntax + tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,10 +35,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Syntax check (node --check)
         # Прогоняем все .js файлы в backend, кроме node_modules.
@@ -48,18 +50,35 @@ jobs:
             -print0 | xargs -0 -n1 node --check
 
       - name: Run tests (node --test)
-        # Node 20 имеет встроенный test runner — не нужны зависимости (jest/mocha).
+        # Node 22 имеет встроенный test runner — не нужны зависимости (jest/mocha).
         run: node --test
 
   deploy:
     name: Deploy → Yandex Cloud
     runs-on: ubuntu-latest
     needs: syntax-and-tests
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' || ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push')
     environment:
       name: production
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          YC_SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          SA_ID: ${{ secrets.SA_ID }}
+          LOCKBOX_ID: ${{ secrets.LOCKBOX_ID }}
+        run: |
+          missing=""
+          [ -z "$YC_SA_KEY_JSON" ] && missing="$missing YC_SA_KEY_JSON"
+          [ -z "$YC_FOLDER_ID" ]   && missing="$missing YC_FOLDER_ID"
+          [ -z "$SA_ID" ]          && missing="$missing SA_ID"
+          [ -z "$LOCKBOX_ID" ]     && missing="$missing LOCKBOX_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Не заданы GitHub Secrets:$missing — добавь их в Settings → Secrets and variables → Actions (см. шапку этого workflow)"
+            exit 1
+          fi
 
       - name: Install yc CLI
         run: |
@@ -67,10 +86,15 @@ jobs:
           echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
 
       - name: Authenticate
+        env:
+          YC_SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
         run: |
-          echo '${{ secrets.YC_SA_KEY_JSON }}' > /tmp/sa-key.json
+          # printf через env-переменную, а не echo с инлайн-подстановкой секрета:
+          # кавычки/спецсимволы внутри JSON-ключа ломали её (key unmarshal fail, run 26850390723).
+          printf '%s' "$YC_SA_KEY_JSON" > /tmp/sa-key.json
+          python3 -c "import json; json.load(open('/tmp/sa-key.json'))" || { echo "::error::YC_SA_KEY_JSON — не валидный JSON (вставь содержимое key.json целиком)"; exit 1; }
           yc config set service-account-key /tmp/sa-key.json
-          yc config set folder-id ${{ secrets.YC_FOLDER_ID }}
+          yc config set folder-id "${{ secrets.YC_FOLDER_ID }}"
 
       - name: Deploy functions
         env:

@@ -56,6 +56,36 @@ paths:
         service_account_id: REPLACE_WITH_SA_ID
         payload_format_version: "1.0"
 
+  /catalog/resolve:
+    post:
+      summary: Резолвер артикулов B3 — article → usdz_url/цена (X-App-Token, action='resolve' в теле)
+      operationId: catalogResolve
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_marketplace
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /payments:
+    post:
+      summary: Подписка — создать платёж / статус (X-App-Token, action в теле)
+      operationId: payments
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_payments
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
+  /payments/webhook:
+    post:
+      summary: Вебхук ЮKassa (без X-App-Token; верификация — перезапрос платежа по API)
+      operationId: paymentsWebhook
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: REPLACE_WITH_FUNCTION_ID_payments
+        service_account_id: REPLACE_WITH_SA_ID
+        payload_format_version: "1.0"
+
   /image-gen:
     post:
       summary: Генерация изображений интерьеров

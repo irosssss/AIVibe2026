@@ -38,6 +38,7 @@ public struct RoomMetrics: Equatable, Sendable {
 
 public enum RoomScanFlowPhase: Equatable, Sendable {
     case intro
+    case manualEntry
     case scanning
     case result
     case styleSelection
@@ -62,6 +63,12 @@ public struct RoomScanFlowFeature: Sendable {
         public var isGeneratingDesign: Bool = false
         public var designPlan: RoomDesignPlan?
         public var designError: String?
+        /// Ошибка валидации ручного ввода размеров (путь без LiDAR).
+        public var manualEntryError: String?
+        /// Статус подписки — для гейтинга квоты сканов FREE (A3.3, UPGRADE_PLAN).
+        public var subscriptionStatus: SubscriptionStatus = .free
+        /// Не-nil → поверх флоу показывается пейволл.
+        public var paywallTrigger: PaywallTrigger?
 
         public init(
             phase: RoomScanFlowPhase = .intro,
@@ -75,11 +82,16 @@ public struct RoomScanFlowFeature: Sendable {
     }
 
     public enum Action: Sendable {
+        case flowAppeared
+        case subscriptionStatusLoaded(SubscriptionStatus)
+        case paywallDismissed
         case startScanTapped
         case scanFinished(Data)
         case scanFailed(String)
         case closeTapped
         case manualEntryTapped
+        case manualDimensionsSubmitted(widthM: Double, depthM: Double, heightM: Double)
+        case backFromManualEntryTapped
         case rescanTapped
         case continueTapped
         case backFromResultTapped
@@ -96,13 +108,34 @@ public struct RoomScanFlowFeature: Sendable {
     }
 
     @Dependency(\.agentOrchestrator) var agentOrchestrator
+    @Dependency(\.subscriptionClient) var subscriptionClient
+    @Dependency(\.storageClient) var storageClient
 
     public init() {}
 
     public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .flowAppeared:
+                return .run { send in
+                    let status = await subscriptionClient.fetchStatus()
+                    await send(.subscriptionStatusLoaded(status))
+                }
+
+            case let .subscriptionStatusLoaded(status):
+                state.subscriptionStatus = status
+                return .none
+
+            case .paywallDismissed:
+                state.paywallTrigger = nil
+                return .none
+
             case .startScanTapped:
+                // Гейт квоты FREE (3 скана/мес — STRATEGY §1.3). PRO/BUSINESS — безлимит.
+                guard quotaAllowsScan(&state) else { return .none }
+                // Квота списывается на старте (просто и детерминированно для MVP).
+                // rescanTapped квоту НЕ тратит — это повтор той же сессии.
+                consumeScanQuota()
                 state.phase = .scanning
                 return .none
 
@@ -190,13 +223,61 @@ public struct RoomScanFlowFeature: Sendable {
                 state.phase = .result
                 return .none
 
+            case .manualEntryTapped:
+                // Ручной ввод — тоже «скан» (ведёт к той же AI-генерации): без гейта
+                // путь без LiDAR (основной для массовых устройств, A1.3) обходил бы пейволл.
+                // Здесь только проверка (без списания) — чтобы не дать зря заполнять форму.
+                guard quotaAllowsScan(&state) else { return .none }
+                state.manualEntryError = nil
+                state.phase = .manualEntry
+                return .none
+
+            case let .manualDimensionsSubmitted(width, depth, height):
+                do {
+                    let geometry = try RoomGeometry.manualRectangular(
+                        widthM: width, depthM: depth, heightM: height
+                    )
+                    // Списание — при успешном вводе (аналог старта AR-скана).
+                    guard quotaAllowsScan(&state) else { return .none }
+                    consumeScanQuota()
+                    state.manualEntryError = nil
+                    state.phase = .styleSelection
+                    // Переиспользуем путь LiDAR-скана: .geometryExtracted выставит geometry + metrics.
+                    return .send(.geometryExtracted(geometry))
+                } catch {
+                    state.manualEntryError = error.localizedDescription
+                    return .none
+                }
+
+            case .backFromManualEntryTapped:
+                state.manualEntryError = nil
+                state.phase = .intro
+                return .none
+
             case .closeTapped,
-                 .manualEntryTapped,
                  .continueTapped,
                  .editObjectTapped:
                 return .none
             }
         }
+    }
+
+    // MARK: - Гейт квоты сканов (A3.3, UPGRADE_PLAN)
+
+    /// Проверяет квоту FREE; при исчерпании показывает пейволл (`paywallTrigger = .scanLimit`).
+    /// PRO/BUSINESS — безлимит. Возвращает true, если действие можно продолжать.
+    private func quotaAllowsScan(_ state: inout State) -> Bool {
+        let quota = ScanQuota.load(from: storageClient)
+        guard quota.canStartScan(tier: state.subscriptionStatus.effectiveTier) else {
+            state.paywallTrigger = .scanLimit
+            return false
+        }
+        return true
+    }
+
+    /// Списывает один скан из месячной квоты.
+    private func consumeScanQuota() {
+        ScanQuota.load(from: storageClient).afterScan().save(to: storageClient)
     }
 
     public static let mockObjects: [ScanResultObject] = [

@@ -1,6 +1,6 @@
 // yandexgpt.js — Клиент YandexGPT для Yandex Cloud Functions
 // Endpoint: https://llm.api.cloud.yandex.net/foundationModels/v1/completion
-// Модель: gpt://{folder-id}/yandexgpt-5/latest
+// Модель: gpt://{folder-id}/yandexgpt/latest (флагман 5-го поколения; имени «yandexgpt-5» в API нет)
 // Auth: IAM-токен из metadata service (свежий токен без ручного обновления).
 
 import { getSecrets } from './secrets.js';
@@ -55,31 +55,41 @@ export async function getIamToken() {
     }
 }
 
+// B7.2: гибрид Lite+Pro. Решение, какую модель брать, принимает роутер
+// (shared/model-router.js) — здесь только маппинг на имя модели Яндекса.
+const GPT_MODELS = {
+    pro: 'yandexgpt',
+    lite: 'yandexgpt-lite',
+};
+
 /**
  * Вызвать YandexGPT с triplex fallback-совместимым форматом
  * @param {object} options
  * @param {string} options.prompt — текстовый промпт
  * @param {string} [options.imageBase64] — base64 изображения (для vision)
  * @param {number} [options.timeoutMs=25000] — таймаут (мс)
- * @returns {Promise<{text: string, usage: object}>}
+ * @param {'pro'|'lite'} [options.model='pro'] — выбор модели (B7, роутер)
+ * @returns {Promise<{text: string, provider: string, model: string, usage: object}>}
  */
-export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) {
+export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000, model = 'pro' }) {
     const secrets = await getSecrets();
     const folderId = secrets.YANDEXGPT_FOLDER_ID;
     const iamToken = await getIamToken();
 
-    const messages = [{ role: 'user', content: prompt }];
+    // Родной API Яндекса ждёт поле text, не content (OpenAI-стиль давал
+    // HTTP 400 «Error in session» — проверено живым вызовом при первом деплое).
+    const messages = [{ role: 'user', text: prompt }];
 
-    // Если есть изображение — добавляем как multimodal контент
+    // Изображение: native completion API картинки не принимает — описываем факт
+    // наличия в тексте, чтобы запрос не падал. Полноценный vision —
+    // отдельной задачей (OpenAI-совместимый эндпоинт или VLM API).
     if (imageBase64) {
-        messages[0].content = [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
-        ];
+        messages[0].text = `${prompt}\n\n[К запросу приложено фото комнаты — анализ изображения временно недоступен, отвечай по тексту.]`;
     }
 
+    const modelName = GPT_MODELS[model] || GPT_MODELS.pro;
     const body = {
-        modelUri: `gpt://${folderId}/yandexgpt-5/latest`,
+        modelUri: `gpt://${folderId}/${modelName}/latest`,
         completionOptions: {
             stream: false,
             temperature: 0.7,
@@ -117,6 +127,7 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) 
         return {
             text,
             provider: 'yandexgpt',
+            model: modelName,
             usage: data.result?.usage || {}
         };
     } finally {
@@ -124,12 +135,22 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) 
     }
 }
 
+// Двойной энкодер Яндекса: документы и запросы кодируются разными моделями
+// в общее векторное пространство. Документы — text-search-doc, запросы —
+// text-search-query (рекомендация Yandex Foundation Models для поиска).
+const EMBEDDING_MODELS = {
+    query: 'text-search-query',
+    doc: 'text-search-doc',
+};
+
 /**
- * Получить embedding вектора для RAG (используется rag-indexer)
+ * Получить embedding вектора для RAG.
  * @param {string} text — текст для эмбеддинга
+ * @param {'query'|'doc'} [kind='query'] — 'doc' при индексации документов
+ *   (rag-indexer), 'query' при поиске (rag-search)
  * @returns {Promise<number[]>}
  */
-export async function getEmbedding(text) {
+export async function getEmbedding(text, kind = 'query') {
     const secrets = await getSecrets();
     const folderId = secrets.YANDEXGPT_FOLDER_ID;
     const iamToken = await getIamToken();
@@ -144,7 +165,7 @@ export async function getEmbedding(text) {
                 'x-folder-id': folderId
             },
             body: JSON.stringify({
-                modelUri: `emb://${folderId}/text-search-query/latest`,
+                modelUri: `emb://${folderId}/${EMBEDDING_MODELS[kind] || EMBEDDING_MODELS.query}/latest`,
                 text: text
             })
         }

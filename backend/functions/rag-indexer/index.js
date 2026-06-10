@@ -7,6 +7,7 @@ import { getEmbedding } from '../../shared/yandexgpt.js';
 import { ydbClient } from '../../shared/ydb-client.js';
 import { getSecrets } from '../../shared/secrets.js';
 import { guardPrompt } from '../../shared/promptGuard.js';
+import { detectCategory } from '../../shared/rag-category.js';
 
 const DESIGN_SOURCES = [
   'https://www.houzz.ru/magazine',
@@ -80,7 +81,7 @@ export const handler = async (event, context) => {
         const embeddings = await parallelLimit(
           cleanChunks,
           10,
-          chunk => getEmbedding(chunk).catch(err => {
+          chunk => getEmbedding(chunk, 'doc').catch(err => {
             console.error(`Embedding failed for chunk of ${pageUrl}:`, err.message);
             return null;
           })
@@ -121,15 +122,6 @@ function splitChunks(text, maxChars) {
   }
   if (current.trim().length > 50) chunks.push(current.trim());
   return chunks;
-}
-
-function detectCategory(text) {
-  const t = text.toLowerCase();
-  if (t.includes('гостиная') || t.includes('диван')) return 'living_room';
-  if (t.includes('спальня') || t.includes('кровать')) return 'bedroom';
-  if (t.includes('кухня')) return 'kitchen';
-  if (t.includes('цвет') || t.includes('палитра')) return 'color';
-  return 'general';
 }
 
 /**
