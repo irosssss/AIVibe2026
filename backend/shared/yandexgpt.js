@@ -124,12 +124,22 @@ export async function callYandexGPT({ prompt, imageBase64, timeoutMs = 25000 }) 
     }
 }
 
+// Двойной энкодер Яндекса: документы и запросы кодируются разными моделями
+// в общее векторное пространство. Документы — text-search-doc, запросы —
+// text-search-query (рекомендация Yandex Foundation Models для поиска).
+const EMBEDDING_MODELS = {
+    query: 'text-search-query',
+    doc: 'text-search-doc',
+};
+
 /**
- * Получить embedding вектора для RAG (используется rag-indexer)
+ * Получить embedding вектора для RAG.
  * @param {string} text — текст для эмбеддинга
+ * @param {'query'|'doc'} [kind='query'] — 'doc' при индексации документов
+ *   (rag-indexer), 'query' при поиске (rag-search)
  * @returns {Promise<number[]>}
  */
-export async function getEmbedding(text) {
+export async function getEmbedding(text, kind = 'query') {
     const secrets = await getSecrets();
     const folderId = secrets.YANDEXGPT_FOLDER_ID;
     const iamToken = await getIamToken();
@@ -144,7 +154,7 @@ export async function getEmbedding(text) {
                 'x-folder-id': folderId
             },
             body: JSON.stringify({
-                modelUri: `emb://${folderId}/text-search-query/latest`,
+                modelUri: `emb://${folderId}/${EMBEDDING_MODELS[kind] || EMBEDDING_MODELS.query}/latest`,
                 text: text
             })
         }

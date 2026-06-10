@@ -6,6 +6,7 @@
 import { triplexFallback } from '../../shared/triplex-fallback.js';
 import { guardPrompt, MAX_PROMPT_LENGTH } from '../../shared/promptGuard.js';
 import { createRateLimiter, clientIp } from '../../shared/rate-limit.js';
+import { enrichPromptWithRAG } from '../../shared/rag-search.js';
 
 // Вторичный лимит по IP (#17): userId берётся из тела и его можно ротировать,
 // IP — нет. Порог выше per-user (NAT/общие сети), это backstop против ротации.
@@ -147,9 +148,18 @@ export const handler = async (event, context) => {
             });
         }
 
+        // 6. RAG-обогащение (после guard/rate limit, перед LLM).
+        // Сбой или таймаут RAG → исходный промпт, запрос не страдает.
+        const enriched = await enrichPromptWithRAG(prompt);
+        if (enriched.ragChunks > 0) {
+            console.log('[info] RAG context attached', JSON.stringify({
+                _l: 'info', userId: userId.slice(0, 16), ragChunks: enriched.ragChunks,
+            }));
+        }
+
         // Единый triplex fallback (Circuit Breaker + кэш — в shared/triplex-fallback.js)
         const result = await triplexFallback({
-            prompt,
+            prompt: enriched.prompt,
             imageBase64,
             timeoutMs: 25000,
             log: (level, msg, extra) => {

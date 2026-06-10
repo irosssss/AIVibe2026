@@ -81,7 +81,7 @@ export const handler = async (event, context) => {
         const embeddings = await parallelLimit(
           cleanChunks,
           10,
-          chunk => getEmbedding(chunk).catch(err => {
+          chunk => getEmbedding(chunk, 'doc').catch(err => {
             console.error(`Embedding failed for chunk of ${pageUrl}:`, err.message);
             return null;
           })

@@ -7,6 +7,7 @@
 import * as promptGuard from './promptGuard.js';
 import * as blockedUsers from './blockedUsers.js';
 import { triplexFallback, circuitStatus, circuitReset, clearCache, cacheSize } from './shared/triplex-fallback.js';
+import { enrichPromptWithRAG } from './shared/rag-search.js';
 
 // ─── Конфигурация ───────────────────────────────────────────────
 
@@ -206,10 +207,17 @@ export const handler = async (event, context) => {
         console.warn('[security] Strike recorded', { userId: userId.slice(0, 16), strikes: strikeResult.strikes });
     }
 
+    // ── 4.7 RAG-обогащение (после guard/rate limit, перед LLM) ──
+    // Сбой или таймаут RAG → исходный промпт, запрос не страдает.
+    const enriched = await enrichPromptWithRAG(prompt);
+    if (enriched.ragChunks > 0) {
+        log('info', 'RAG context attached', { ragChunks: enriched.ragChunks });
+    }
+
     // ── 5. Triplex Fallback (YandexGPT → GigaChat → Cache) ────
     // Использует единую реализацию из shared/triplex-fallback.js
     const triplexResult = await triplexFallback({
-        prompt,
+        prompt: enriched.prompt,
         imageBase64,
         timeoutMs: 25000,
         log: (level, msg, extra) => {

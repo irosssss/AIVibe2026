@@ -4,8 +4,9 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchRAG } from '../shared/rag-search.js';
+import { searchRAG, enrichPromptWithRAG } from '../shared/rag-search.js';
 import { detectCategory, GENERAL_CATEGORY } from '../shared/rag-category.js';
+import { getEmbedding } from '../shared/yandexgpt.js';
 import { toDynamo } from '../shared/ydb-client.js';
 
 const ENDPOINT = 'https://docapi.test.local/ru-central1/b1g/etn';
@@ -29,15 +30,18 @@ function chunk(content, embedding, category = 'kitchen') {
 /**
  * Мок fetch: metadata падает (env-fallback IAM), embedding API отдаёт
  * queryEmbedding, Document API — страницы из очереди.
- * Возвращает захваченные тела Scan-запросов.
+ * Возвращает захваченные тела Scan-запросов и запросов к embedding API.
  */
-function mockRagBackend({ queryEmbedding, pages, embeddingFails = false }) {
+function mockRagBackend({ queryEmbedding, pages, embeddingFails = false, embeddingHangs = false }) {
     const scans = [];
+    const embeds = [];
     let page = 0;
     globalThis.fetch = async (url, opts = {}) => {
         const u = String(url);
         if (u.includes('169.254.169.254')) throw new Error('metadata unavailable in tests');
         if (u.includes(EMBEDDING_URL)) {
+            embeds.push(JSON.parse(opts.body));
+            if (embeddingHangs) return new Promise(() => {}); // зависший вызов
             if (embeddingFails) return { ok: false, status: 500 };
             return { ok: true, json: async () => ({ embedding: queryEmbedding }) };
         }
@@ -47,7 +51,7 @@ function mockRagBackend({ queryEmbedding, pages, embeddingFails = false }) {
         page++;
         return { ok: true, json: async () => res };
     };
-    return scans;
+    return { scans, embeds };
 }
 
 // ─── Эвристика категорий ─────────────────────────────────────────
@@ -63,12 +67,15 @@ test('detectCategory: стемы покрывают словоформы зап�
 // ─── searchRAG ───────────────────────────────────────────────────
 
 test('searchRAG: тематический запрос фильтруется по категории на стороне YDB', async () => {
-    const scans = mockRagBackend({
+    const { scans, embeds } = mockRagBackend({
         queryEmbedding: [1, 0],
         pages: [{ Items: [chunk('про кухню', [1, 0])] }],
     });
 
     const results = await searchRAG('Идеи для кухни');
+
+    // Запрос кодируется «запросной» моделью двойного энкодера.
+    assert.match(embeds[0].modelUri, /\/text-search-query\/latest$/);
 
     assert.equal(scans.length, 1);
     const body = scans[0];
@@ -89,7 +96,7 @@ test('searchRAG: тематический запрос фильтруется п
 });
 
 test('searchRAG: нераспознанная категория → скан без фильтра, но с проекцией', async () => {
-    const scans = mockRagBackend({
+    const { scans } = mockRagBackend({
         queryEmbedding: [1, 0],
         pages: [{ Items: [chunk('общий совет', [1, 0], 'general')] }],
     });
@@ -143,4 +150,60 @@ test('searchRAG: YDB не настроен → пустой результат (
     mockRagBackend({ queryEmbedding: [1, 0], pages: [] });
     const results = await searchRAG('Идеи для кухни');
     assert.deepEqual(results, []);
+});
+
+// ─── Модели двойного энкодера ────────────────────────────────────
+
+test('getEmbedding: документы индексируются моделью text-search-doc', async () => {
+    const { embeds } = mockRagBackend({ queryEmbedding: [1, 0], pages: [] });
+
+    await getEmbedding('текст статьи о дизайне', 'doc');
+    await getEmbedding('запрос пользователя'); // kind по умолчанию
+
+    assert.match(embeds[0].modelUri, /\/text-search-doc\/latest$/);
+    assert.match(embeds[1].modelUri, /\/text-search-query\/latest$/);
+});
+
+// ─── enrichPromptWithRAG ─────────────────────────────────────────
+
+test('enrichPromptWithRAG: выдержки в промпте помечены как данные, не инструкции', async () => {
+    mockRagBackend({
+        queryEmbedding: [1, 0],
+        pages: [{ Items: [chunk('Кухонный остров требует 120 см прохода', [1, 0])] }],
+    });
+
+    const question = 'Идеи для кухни';
+    const { prompt, ragChunks } = await enrichPromptWithRAG(question);
+
+    assert.equal(ragChunks, 1);
+    assert.ok(prompt.includes('[1] Кухонный остров требует 120 см прохода'));
+    assert.ok(prompt.includes('не инструкции'));
+    assert.ok(prompt.endsWith('Вопрос пользователя:\n' + question));
+});
+
+test('enrichPromptWithRAG: без находок → исходный промпт без изменений', async () => {
+    mockRagBackend({ queryEmbedding: [1, 0], pages: [{ Items: [] }] });
+
+    const { prompt, ragChunks } = await enrichPromptWithRAG('Идеи для кухни');
+
+    assert.equal(ragChunks, 0);
+    assert.equal(prompt, 'Идеи для кухни');
+});
+
+test('enrichPromptWithRAG: зависший поиск → таймаут → исходный промпт', async () => {
+    mockRagBackend({ queryEmbedding: [1, 0], pages: [], embeddingHangs: true });
+
+    const { prompt, ragChunks } = await enrichPromptWithRAG('Идеи для кухни', { timeoutMs: 20 });
+
+    assert.equal(ragChunks, 0);
+    assert.equal(prompt, 'Идеи для кухни');
+});
+
+test('enrichPromptWithRAG: ошибка RAG → исходный промпт (non-fatal)', async () => {
+    mockRagBackend({ queryEmbedding: [1, 0], pages: [], embeddingFails: true });
+
+    const { prompt, ragChunks } = await enrichPromptWithRAG('Идеи для кухни');
+
+    assert.equal(ragChunks, 0);
+    assert.equal(prompt, 'Идеи для кухни');
 });
