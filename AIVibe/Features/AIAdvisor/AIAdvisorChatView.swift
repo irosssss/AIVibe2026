@@ -73,6 +73,15 @@ struct AIAdvisorChatView: View {
             .task {
                 // Загружаем сохранённую историю чата при открытии экрана (B1).
                 store.send(.onAppear)
+
+                // `-DemoChat` — скриптовые скриншоты (как `-StartTab`):
+                // автоматически отправляет вопрос, чтобы получить ответ
+                // и подборку из демо-каталога без ручного ввода.
+                if ProcessInfo.processInfo.arguments.contains("-DemoChat"),
+                   store.chatMessages.isEmpty {
+                    store.currentInput = "Подбери диван до 70 000 ₽"
+                    sendMessage()
+                }
             }
             .onChange(of: store.chatMessages.count) { _, count in
                 startStreamingIfNeeded(count: count)
@@ -89,6 +98,13 @@ struct AIAdvisorChatView: View {
                     ]
                 default:
                     toolCalls = []
+                    // После первого ответа AI показываем подборку из
+                    // демо-каталога фабрик (заменится результатами B4).
+                    if !store.chatMessages.isEmpty, inlineFurniture.isEmpty {
+                        inlineFurniture = PartnerCatalogStub
+                            .chatShowcase(budgetRub: budget?.max)
+                            .map(ChatFurnitureItem.init(catalogItem:))
+                    }
                 }
             }
         }
@@ -316,12 +332,32 @@ public struct ChatFurnitureItem: Identifiable, Equatable, Sendable {
     public let price: Int
     public let tone: AIPhotoTone
     public let market: AIMarket
+    /// Артикул каталога фабрик (для карточки товара и 3D-модели).
+    public let article: String?
 
-    public init(title: String, price: Int, tone: AIPhotoTone, market: AIMarket) {
+    public init(
+        title: String,
+        price: Int,
+        tone: AIPhotoTone,
+        market: AIMarket,
+        article: String? = nil
+    ) {
         self.title = title
         self.price = price
         self.tone = tone
         self.market = market
+        self.article = article
+    }
+
+    /// Карточка из позиции демо-каталога фабрик.
+    public init(catalogItem: PartnerCatalogItem) {
+        self.init(
+            title: catalogItem.name,
+            price: catalogItem.priceRub,
+            tone: catalogItem.tone,
+            market: .partner,
+            article: catalogItem.article
+        )
     }
 }
 

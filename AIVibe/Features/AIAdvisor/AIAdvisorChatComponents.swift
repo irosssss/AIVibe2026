@@ -303,7 +303,13 @@ struct InlineFurnitureRow: View {
                     } label: {
                         VStack(spacing: 8) {
                             ZStack(alignment: .topLeading) {
-                                PhotoSlot(tone: it.tone, cornerRadius: 10, aspectRatio: 4.0/3.0)
+                                ModelPhoto(
+                                    usdzFile: it.article
+                                        .flatMap { PartnerCatalogStub.item(article: $0)?.usdzFile },
+                                    tone: it.tone,
+                                    cornerRadius: 10,
+                                    aspectRatio: 4.0 / 3.0
+                                )
                                 MarketBadge(it.market).padding(6)
                             }
 
