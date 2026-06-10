@@ -43,9 +43,16 @@ public struct ModelPhoto: View {
                     cornerRadius: cornerRadius,
                     aspectRatio: aspectRatio
                 )
-                .task(id: usdzFile) {
-                    thumbnail = await ModelThumbnailCache.shared.thumbnail(for: usdzFile)
-                }
+            }
+        }
+        // `.task(id:)` на контейнере: при смене usdzFile (переиспользование
+        // вью под другой товар) старая миниатюра сбрасывается, прежняя
+        // загрузка отменяется, устаревший результат не применяется.
+        .task(id: usdzFile) {
+            thumbnail = nil
+            let image = await ModelThumbnailCache.shared.thumbnail(for: usdzFile)
+            if !Task.isCancelled {
+                thumbnail = image
             }
         }
     }
