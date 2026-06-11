@@ -15,6 +15,9 @@ public struct ProductDetailView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
+    /// Системный AR Quick Look для товара с 3D-моделью в бандле.
+    @State private var isARQuickLookPresented = false
+
     public init(
         store: StoreOf<ProductDetailFeature>,
         onBack: @escaping () -> Void = {},
@@ -54,6 +57,12 @@ public struct ProductDetailView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomActionBar
+            }
+            .fullScreenCover(isPresented: $isARQuickLookPresented) {
+                if let url = bundledUSDZURL(for: store.product.usdzFile) {
+                    ARQuickLookView(fileURL: url)
+                        .ignoresSafeArea()
+                }
             }
         }
     }
@@ -382,7 +391,14 @@ public struct ProductDetailView: View {
             Button {
                 Haptics.medium()
                 store.send(.viewInARTapped)
-                onViewInAR()
+                // 3D-модель в бандле → системный AR Quick Look (жесты, тени,
+                // реальный масштаб от iOS — путь Я.Маркета). Без модели —
+                // прежний путь в AR-дизайнер комнаты.
+                if bundledUSDZURL(for: store.product.usdzFile) != nil {
+                    isARQuickLookPresented = true
+                } else {
+                    onViewInAR()
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "camera.viewfinder")
