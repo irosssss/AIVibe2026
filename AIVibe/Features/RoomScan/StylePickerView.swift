@@ -316,16 +316,19 @@ struct DesignCompleteView: View {
                                         .frame(width: 28, height: 28)
 
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.itemType)
+                                            Text(furnitureDisplayTitle(item))
                                                 .aiType(.body)
                                                 .foregroundStyle(c.onSurface)
-                                            if !item.brand.isEmpty {
-                                                Text(item.brand)
-                                                    .aiType(.caption)
-                                                    .foregroundStyle(c.onSurfaceMuted)
-                                            }
+                                            Text(furnitureTypeDisplayName(item.itemType))
+                                                .aiType(.caption)
+                                                .foregroundStyle(c.onSurfaceMuted)
                                         }
                                         Spacer()
+                                        if let price = item.price {
+                                            Text(aiFmtRub(price))
+                                                .aiType(.callout)
+                                                .foregroundStyle(c.onSurface)
+                                        }
                                     }
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 10)
@@ -348,16 +351,19 @@ struct DesignCompleteView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 10) {
+                    // fixedSize: иначе primary (maxWidth ∞) сжимает кнопку до
+                    // ширины буквы, текст переносится по символу на строку и
+                    // нижняя панель раздувается на пол-экрана.
                     SecondaryButton("Изменить стиль") {
                         Haptics.light()
                         store.send(.backFromStyleTapped)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                     PrimaryButton("Смотреть в AR") {
                         Haptics.medium()
                         store.send(.continueTapped)
                         onContinue()
                     }
-                    .layoutPriority(1)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -369,15 +375,4 @@ struct DesignCompleteView: View {
         }
     }
 
-    private func furnitureIcon(_ type: String) -> String {
-        switch type.lowercased() {
-        case "sofa", "диван":      return "sofa"
-        case "table", "стол":      return "table.furniture"
-        case "chair", "стул":      return "chair"
-        case "bed", "кровать":     return "bed.double"
-        case "wardrobe", "шкаф":   return "cabinet"
-        case "bookshelf", "полка": return "books.vertical"
-        default:                   return "cube"
-        }
-    }
 }

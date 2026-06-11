@@ -630,15 +630,18 @@ struct ScanResultScreenView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 10) {
+                    // fixedSize: иначе primary (maxWidth ∞) сжимает кнопку до
+                    // ширины буквы, текст переносится по символу на строку и
+                    // нижняя панель раздувается на пол-экрана.
                     SecondaryButton("Пересканировать") {
                         Haptics.warning()
                         store.send(.rescanTapped)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                     PrimaryButton("Выбрать стиль") {
                         Haptics.medium()
                         store.send(.selectStyleTapped)
                     }
-                    .layoutPriority(1)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

@@ -91,6 +91,18 @@ struct ARDesignerView: View {
     /// snapshot-версионированием и task-отменой для incremental apply.
     @State private var sceneBridge = ARSceneBridge()
     @State private var draggedEntityID: UUID?
+    /// Живая позиция во время переноса — для коммита в onEnded.
+    @State private var dragLivePosition: SIMD3<Float>?
+    /// Якорь камеры: его transform = положение устройства. Нужен, чтобы
+    /// переводить жест с экрана в метры по полу с учётом расстояния
+    /// до предмета и направления взгляда (как в IKEA Place).
+    @State private var cameraAnchor = AnchorEntity(.camera)
+    /// Размер вью в поинтах — для пересчёта «поинты → метры».
+    @State private var viewSize: CGSize = .zero
+    /// Вращение выбранного предмета на старте жеста (градусы).
+    @State private var rotationStartDegrees: Float?
+    /// Живое вращение во время жеста — для коммита в onEnded.
+    @State private var rotationLiveDegrees: Float?
 
     /// Состояние ARKit-якоря пола. Управляет coaching overlay'ем
     /// "наведите камеру на пол" пока anchor не зарезолвлен.
@@ -269,6 +281,14 @@ struct ARDesignerView: View {
 
     private var realityContent: some View {
         RealityView { content in
+            // Камера AR-passthrough: без этого RealityView на iOS рендерит
+            // виртуальную камеру с чёрным фоном — пользователь видел
+            // «чёрный экран» вместо своей комнаты.
+            content.camera = .spatialTracking
+
+            // Якорь камеры — для пересчёта жестов в метры по полу.
+            content.add(cameraAnchor)
+
             if let root = sceneBridge.rootEntity {
                 content.add(root)
             }
@@ -290,6 +310,8 @@ struct ARDesignerView: View {
         }
         .gesture(tapGesture)
         .gesture(dragGesture)
+        .simultaneousGesture(rotationGesture)
+        .onGeometryChange(for: CGSize.self, of: \.size) { viewSize = $0 }
         .task { await startTrackingSession() }
     }
 
@@ -374,48 +396,104 @@ struct ARDesignerView: View {
             }
     }
 
-    // ~200pt экрана ≈ 1 метр в AR (приблизительно, зависит от расстояния)
-    private static let pixelsPerMeter: CGFloat = 200
+    /// Приблизительный вертикальный угол обзора AR-камеры iPhone (~60°).
+    private static let cameraVerticalFOV: Float = 60 * .pi / 180
 
+    /// Перенос в плоскости пола, откалиброванный по камере (подход IKEA
+    /// Place): жест с экрана переводится в метры через реальное расстояние
+    /// от устройства до предмета и FOV камеры, направления — вдоль взгляда,
+    /// высота (y) фиксирована. Раньше был жёсткий маппинг «200pt ≈ 1 м» без
+    /// учёта направления камеры — предметы уезжали мимо пальца («косо-криво»).
     private var dragGesture: some Gesture {
         DragGesture()
             .targetedToAnyEntity()
             .onChanged { value in
-                guard let id = entityUUID(value.entity) else { return }
+                guard let id = entityUUID(value.entity),
+                      let item = store.items[id: id],
+                      let root = sceneBridge.rootEntity else { return }
                 if draggedEntityID == nil { draggedEntityID = id }
-                guard let item = store.items[id: id] else { return }
 
-                let dx = Float(value.gestureValue.translation.width / Self.pixelsPerMeter)
-                let dz = Float(value.gestureValue.translation.height / Self.pixelsPerMeter)
-
-                let newPosition = SIMD3<Float>(
-                    item.position.x + dx,
-                    item.position.y,
-                    item.position.z + dz
+                // Камера в пространстве root-якоря.
+                let camTransform = cameraAnchor.transformMatrix(relativeTo: root)
+                let camPosition = SIMD3<Float>(
+                    camTransform.columns.3.x,
+                    camTransform.columns.3.y,
+                    camTransform.columns.3.z
                 )
+
+                // Оси жеста на полу: «вправо» и «от себя» вдоль взгляда камеры.
+                let rawRight = SIMD3<Float>(
+                    camTransform.columns.0.x, 0, camTransform.columns.0.z
+                )
+                let rawForward = SIMD3<Float>(
+                    -camTransform.columns.2.x, 0, -camTransform.columns.2.z
+                )
+                guard simd_length(rawRight) > 0.001, simd_length(rawForward) > 0.001,
+                      viewSize.height > 0 else { return }
+                let right = simd_normalize(rawRight)
+                let forward = simd_normalize(rawForward)
+
+                // Поинты → метры: чем дальше предмет, тем больше метров в поинте.
+                let distance = max(simd_length(camPosition - item.position), 0.3)
+                let metersPerPoint = 2 * distance
+                    * tan(Self.cameraVerticalFOV / 2)
+                    / Float(viewSize.height)
+
+                let dx = Float(value.gestureValue.translation.width) * metersPerPoint
+                let dz = Float(value.gestureValue.translation.height) * metersPerPoint
+
+                // Палец вверх по экрану = предмет дальше от камеры.
+                let target = item.position + right * dx - forward * dz
+                let newPosition = SIMD3<Float>(target.x, item.position.y, target.z)
+                dragLivePosition = newPosition
 
                 sceneBridge.liveTransform(
                     id: id,
                     position: newPosition,
-                    rotation: item.rotation
+                    rotation: rotationLiveDegrees ?? item.rotation
                 )
             }
-            .onEnded { value in
-                guard let id = draggedEntityID else { return }
-                draggedEntityID = nil
-                guard let item = store.items[id: id] else { return }
-
-                let dx = Float(value.gestureValue.translation.width / Self.pixelsPerMeter)
-                let dz = Float(value.gestureValue.translation.height / Self.pixelsPerMeter)
-
-                let finalPosition = SIMD3<Float>(
-                    item.position.x + dx,
-                    item.position.y,
-                    item.position.z + dz
-                )
-
+            .onEnded { _ in
+                defer {
+                    draggedEntityID = nil
+                    dragLivePosition = nil
+                }
+                guard let id = draggedEntityID,
+                      let finalPosition = dragLivePosition else { return }
                 Haptics.selection()
                 store.send(.itemMoved(id: id, newPosition: finalPosition))
+            }
+    }
+
+    /// Вращение двумя пальцами — для выбранного предмета (тап → выделение,
+    /// затем вращайте в любом месте экрана; не требует попадания двумя
+    /// пальцами в предмет). Коммит — в `.itemRotated` (там же collision-check).
+    private var rotationGesture: some Gesture {
+        RotateGesture()
+            .onChanged { value in
+                guard let id = store.selectedItemID,
+                      let item = store.items[id: id] else { return }
+                if rotationStartDegrees == nil {
+                    rotationStartDegrees = item.rotation
+                }
+                let newRotation = (rotationStartDegrees ?? 0) + Float(value.rotation.degrees)
+                rotationLiveDegrees = newRotation
+
+                sceneBridge.liveTransform(
+                    id: id,
+                    position: dragLivePosition ?? item.position,
+                    rotation: newRotation
+                )
+            }
+            .onEnded { _ in
+                defer {
+                    rotationStartDegrees = nil
+                    rotationLiveDegrees = nil
+                }
+                guard let id = store.selectedItemID,
+                      let finalRotation = rotationLiveDegrees else { return }
+                Haptics.selection()
+                store.send(.itemRotated(id: id, newRotation: finalRotation))
             }
     }
 

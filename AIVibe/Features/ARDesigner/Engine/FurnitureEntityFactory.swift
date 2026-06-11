@@ -54,27 +54,36 @@ public final class FurnitureEntityFactory {
         switch asset {
         case .file(let url):
             do {
-                return try await loadUSDZ(from: url, targetSize: item.size)
+                let content = try await Entity(contentsOf: url)
+                return container(wrapping: content, item: item)
             } catch {
                 logger.warning("Не удалось загрузить \(url.lastPathComponent): \(error.localizedDescription)")
-                return generatePlaceholder(for: item)
+                return container(wrapping: generatePlaceholder(for: item), item: item)
             }
         case .placeholder:
-            return generatePlaceholder(for: item)
+            return container(wrapping: generatePlaceholder(for: item), item: item)
         }
     }
 
-    private func loadUSDZ(from url: URL, targetSize: SIMD3<Float>) async throws -> ModelEntity {
-        let entity = try await Entity(contentsOf: url)
-        guard let model = entity as? ModelEntity
-                ?? entity.children.first(where: { $0 is ModelEntity }) as? ModelEntity else {
-            let wrapper = ModelEntity()
-            wrapper.addChild(entity)
-            scaleToFit(wrapper, targetSize: targetSize)
-            return wrapper
-        }
-        scaleToFit(model, targetSize: targetSize)
-        return model
+    /// Оборачивает контент в контейнер с нормализованным пивотом:
+    /// основание модели — на полу (y=0), центр — в точке позиции.
+    /// Без этого модели с центральным/смещённым пивотом (включая
+    /// placeholder-боксы) тонули в полу или стояли со смещением —
+    /// то самое «косо-криво» из фидбека с устройства.
+    private func container(wrapping content: Entity, item: FurnitureItem) -> ModelEntity {
+        let container = ModelEntity()
+        container.addChild(content)
+        scaleToFit(content, targetSize: item.size)
+        alignToPivot(content, in: container)
+        return container
+    }
+
+    /// Сдвигает контент так, чтобы низ был на y=0, а центр — над пивотом контейнера.
+    private func alignToPivot(_ content: Entity, in container: Entity) {
+        let bounds = content.visualBounds(relativeTo: container)
+        content.position.y -= bounds.min.y
+        content.position.x -= bounds.center.x
+        content.position.z -= bounds.center.z
     }
 
     private func generatePlaceholder(for item: FurnitureItem) -> ModelEntity {
@@ -103,7 +112,7 @@ public final class FurnitureEntityFactory {
 
     // MARK: - Transform & components
 
-    private func scaleToFit(_ entity: ModelEntity, targetSize: SIMD3<Float>) {
+    private func scaleToFit(_ entity: Entity, targetSize: SIMD3<Float>) {
         let bounds = entity.visualBounds(relativeTo: nil)
         let currentSize = bounds.extents
         guard currentSize.x > 0, currentSize.y > 0, currentSize.z > 0 else { return }
@@ -122,7 +131,11 @@ public final class FurnitureEntityFactory {
     }
 
     private func attachComponents(_ entity: ModelEntity, item: FurnitureItem) {
-        let shape = ShapeResource.generateBox(size: item.size)
+        // Контент выровнен основанием на y=0 → collision-бокс поднимаем
+        // на половину высоты, чтобы он совпадал с видимой моделью.
+        let shape = ShapeResource
+            .generateBox(size: item.size)
+            .offsetBy(translation: SIMD3<Float>(0, item.size.y / 2, 0))
         entity.components.set(CollisionComponent(shapes: [shape]))
         entity.components.set(InputTargetComponent())
         // Apple forum #733918: GroundingShadowComponent должен стоять на каждом
