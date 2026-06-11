@@ -6,8 +6,8 @@ import SwiftUI
 
 // MARK: - Маппинг FurnitureItem → UI
 
-func furnitureDisplayTitle(_ item: FurnitureItem) -> String {
-    let type = item.itemType.lowercased()
+/// Русское имя типа мебели («sofa» → «Диван»).
+func furnitureTypeDisplayName(_ itemType: String) -> String {
     let names: [String: String] = [
         "sofa": "Диван", "диван": "Диван",
         "table": "Стол", "стол": "Стол",
@@ -15,12 +15,23 @@ func furnitureDisplayTitle(_ item: FurnitureItem) -> String {
         "armchair": "Кресло", "кресло": "Кресло",
         "bed": "Кровать", "кровать": "Кровать",
         "wardrobe": "Шкаф", "шкаф": "Шкаф",
-        "bookshelf": "Полка", "полка": "Полка",
+        "shelf": "Полка", "bookshelf": "Полка", "полка": "Полка",
+        "cabinet": "Тумба", "тумба": "Тумба",
         "lamp": "Торшер", "торшер": "Торшер",
+        "carpet": "Ковёр", "ковёр": "Ковёр",
         "desk": "Письменный стол"
     ]
-    let displayType = names[type] ?? item.itemType
+    return names[itemType.lowercased()] ?? itemType
+}
+
+func furnitureDisplayTitle(_ item: FurnitureItem) -> String {
+    let displayType = furnitureTypeDisplayName(item.itemType)
     if item.brand.isEmpty { return displayType }
+    // Полное название из каталога (B4) уже начинается с типа
+    // («Диван трёхместный …») — не дублируем «Диван Диван …».
+    if item.brand.lowercased().hasPrefix(displayType.lowercased()) {
+        return item.brand
+    }
     return "\(displayType) \(item.brand)"
 }
 

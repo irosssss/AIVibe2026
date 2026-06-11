@@ -269,6 +269,11 @@ struct ARDesignerView: View {
 
     private var realityContent: some View {
         RealityView { content in
+            // Камера AR-passthrough: без этого RealityView на iOS рендерит
+            // виртуальную камеру с чёрным фоном — пользователь видел
+            // «чёрный экран» вместо своей комнаты.
+            content.camera = .spatialTracking
+
             if let root = sceneBridge.rootEntity {
                 content.add(root)
             }
