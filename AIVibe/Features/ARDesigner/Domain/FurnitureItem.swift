@@ -14,6 +14,9 @@ public struct FurnitureItem: Identifiable, Codable, Sendable, Equatable {
     public var rotation: Float       // градусы вокруг оси Y
     public var size: SIMD3<Float>    // ширина, высота, глубина в метрах
     public let usdzURL: String
+    /// Цена из партнёрского каталога, ₽ (B4: заполняется резолвером артикулов;
+    /// nil = предмет не из каталога, «цена уточняется»).
+    public let price: Int?
 
     public init(
         id: UUID = UUID(),
@@ -23,7 +26,8 @@ public struct FurnitureItem: Identifiable, Codable, Sendable, Equatable {
         position: SIMD3<Float>,
         rotation: Float,
         size: SIMD3<Float>,
-        usdzURL: String
+        usdzURL: String,
+        price: Int? = nil
     ) {
         self.id = id
         self.itemType = itemType
@@ -33,5 +37,6 @@ public struct FurnitureItem: Identifiable, Codable, Sendable, Equatable {
         self.rotation = rotation
         self.size = size
         self.usdzURL = usdzURL
+        self.price = price
     }
 }

@@ -116,30 +116,23 @@ struct MarketplaceClient {
 extension MarketplaceClient: DependencyKey {
     static let liveValue = MarketplaceClient(
         recommend: { query, style, budget in
-            guard let url = URL(string: "https://functions.yandexcloud.net/YOUR_MARKETPLACE_FUNCTION_ID") else {
-                throw URLError(.badURL)
+            // Живой партнёрский каталог (B2) через общий клиент: URL/токен —
+            // из BackendConfig, формат — контракт functions/marketplace.
+            let products = try await PartnerCatalogClient.liveValue.search(
+                query, style, budget.map(Int.init)
+            )
+            return products.compactMap { product in
+                guard let url = URL(string: product.productURLString) else { return nil }
+                return MarketplaceProduct(
+                    id: product.article,
+                    name: product.name,
+                    price: product.price.map(Double.init),
+                    url: url,
+                    imageURL: URL(string: product.imageURLString),
+                    aiReason: product.aiReason ?? "",
+                    marketplace: "partner"
+                )
             }
-
-            let body: [String: Any] = [
-                "query": query,
-                "roomStyle": style,
-                "budget": budget as Any,
-                "userId": "current_user_id"
-            ]
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            request.timeoutInterval = 90
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw URLError(.badServerResponse)
-            }
-
-            struct Response: Codable { let products: [MarketplaceProduct] }
-            return try JSONDecoder().decode(Response.self, from: data).products
         }
     )
 

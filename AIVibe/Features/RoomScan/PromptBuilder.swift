@@ -83,6 +83,7 @@ public struct PromptBuilder: PromptBuilding {
     Формат ответа: ТОЛЬКО валидный JSON без markdown-обёртки.
     JSON схема: { "items": [...], "explanation": "...", "confidence": 0.0–1.0 }
     Каждый item: { "itemType": "...", "brand": "...", "article": "...", "position": {"x":0,"y":0,"z":0}, "rotation": 0.0, "usdz_url": "", "size": {"x":0,"y":0,"z":0} }
+    Поле article — артикул из каталога фабрик-партнёров, если он приложен к запросу; не выдумывай артикулы. Поле usdz_url всегда оставляй пустой строкой.
     Размеры (size) в метрах: x=ширина, y=высота, z=глубина.
     Координаты (position) в метрах от угла комнаты (0,0,0).
     """

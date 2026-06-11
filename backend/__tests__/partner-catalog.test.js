@@ -98,14 +98,20 @@ test('toMarketplaceProduct: формат products + marketplace=partner', () => 
         usdzUrl: 'https://storage.test/models/TEST-1.usdz',
         category: 'sofa',
         style: 'loft',
+        width_cm: 200,
+        depth_cm: 90,
+        height_cm: 80,
     });
 });
 
 test('toMarketplaceProduct: битые поля не ломают формат', () => {
-    const product = toMarketplaceProduct({ article: 42, price: 'дорого' });
+    const product = toMarketplaceProduct({ article: 42, price: 'дорого', width_cm: 'широкий' });
     assert.equal(product.article, '42');
     assert.equal(product.price, null);
     assert.equal(product.name, 'Без названия');
+    assert.equal(product.width_cm, null);
+    assert.equal(product.depth_cm, null);
+    assert.equal(product.height_cm, null);
 });
 
 // ─── searchPartnerCatalog ────────────────────────────────────────

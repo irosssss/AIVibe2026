@@ -50,6 +50,10 @@ struct AIAdvisorFeature {
         // Чат
         var chatMessages: [AdvisorChatMessage] = []
         var currentInput: String = ""
+
+        // Живая подборка из партнёрского каталога под последний запрос (B4).
+        // Пусто = показываем демо-стаб (PartnerCatalogStub).
+        var suggestedProducts: [PartnerProduct] = []
     }
 
     // MARK: - Action
@@ -71,6 +75,7 @@ struct AIAdvisorFeature {
         case sendChatMessage
         case sendTextOnlyMessage           // chat без вложенного фото
         case chatResponseReceived(AdvisorChatMessage)
+        case catalogSuggestionsLoaded([PartnerProduct])
 
         case onAppear                              // загрузить сохранённый чат
         case chatHistoryLoaded([AdvisorChatMessage])
@@ -82,6 +87,7 @@ struct AIAdvisorFeature {
 
     @Dependency(\.aiAdvisorClient) var aiAdvisorClient
     @Dependency(\.storageClient) var storageClient
+    @Dependency(\.partnerCatalogClient) var partnerCatalogClient
 
     /// Ключ персистентного хранения истории чата (локально, B1).
     static let chatHistoryKey = "advisor_chat_history_v1"
@@ -206,29 +212,47 @@ struct AIAdvisorFeature {
                 }
 
             case .sendTextOnlyMessage:
-                // Чат без приложенного фото: пользователь просто пишет вопрос.
-                // На MVP-демо отвечаем мок-сообщением через дилей, чтобы
-                // сработали thinking-индикаторы. После подключения backend
-                // здесь будет вызов text-only endpoint AgentLoop.
+                // Чат без приложенного фото: вопрос уходит на наш бэкенд
+                // (ai-advisor: promptGuard → RAG → роутер Lite/Pro → Triplex).
+                // Бэкенд недоступен/не сконфигурирован → офлайн-фолбэк,
+                // чат не падает. Параллельно — живая подборка каталога (B4).
                 let input = state.currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !input.isEmpty else { return .none }
                 let userMsg = AdvisorChatMessage(text: input, provider: "", isUser: true)
                 state.chatMessages.append(userMsg)
                 state.currentInput = ""
                 state.phase = .awaitingAI
-                state.activeProvider = "Demo"
+                state.activeProvider = nil
                 // Сохраняем сообщение пользователя ДО ответа (в том же эффекте) —
                 // последовательно, без гонки с записью полного транскрипта. Codex P2.
-                return .run { [storageClient, messages = state.chatMessages] send in
+                return .run { [storageClient, aiAdvisorClient, partnerCatalogClient, messages = state.chatMessages] send in
                     try? storageClient.save(messages, forKey: Self.chatHistoryKey)
-                    try? await Task.sleep(for: .seconds(1.5))
-                    let reply = AdvisorChatMessage(
-                        text: "Это демо-ответ. Прикрепите фото комнаты, чтобы получить настоящий совет от AI-дизайнера.",
-                        provider: "Demo",
-                        isUser: false
-                    )
-                    await send(.chatResponseReceived(reply))
+
+                    // Подборка каталога — параллельно с ответом AI, best-effort.
+                    async let suggestions = (try? partnerCatalogClient.search(input, nil, nil)) ?? []
+
+                    do {
+                        let reply = try await aiAdvisorClient.getChatReply(input)
+                        await send(.chatResponseReceived(reply))
+                    } catch {
+                        let fallback = AdvisorChatMessage(
+                            text: "Сейчас нет связи с AI-сервером — проверьте интернет и попробуйте ещё раз. "
+                                + "А пока могу показать подборку из каталога фабрик ниже.",
+                            provider: "offline",
+                            isUser: false
+                        )
+                        await send(.chatResponseReceived(fallback))
+                    }
+                    await send(.catalogSuggestionsLoaded(suggestions))
                 }
+
+            case let .catalogSuggestionsLoaded(products):
+                // Пустой результат не затирает прежнюю подборку (UI сам
+                // деградирует в демо-стаб, если подборок ещё не было).
+                if !products.isEmpty {
+                    state.suggestedProducts = products
+                }
+                return .none
 
             case .chatResponseReceived(let msg):
                 state.chatMessages.append(msg)
@@ -295,6 +319,8 @@ struct AdvisorChatMessage: Identifiable, Equatable, Sendable, Codable {
 
 struct AIAdvisorClient: Sendable {
     var getAdvice: @Sendable (DesignRequest) async throws -> DesignAdvice
+    /// Текстовый чат без фото: вопрос → живой ответ ai-advisor.
+    var getChatReply: @Sendable (String) async throws -> AdvisorChatMessage
 }
 
 // MARK: - Dependency Registration
@@ -310,38 +336,51 @@ private struct AdvisorResponseBody: Decodable {
     let provider: String
 }
 
+/// POST на ai-advisor (контракт backend/functions/ai-advisor/index.js).
+/// URL/токен — из BackendConfig (Info.plist → BackendConfig.plist);
+/// не сконфигурировано → ошибка без похода в сеть (graceful fail, L5/#22).
+private func postToAdvisor(prompt: String, imageBase64: String) async throws -> AdvisorResponseBody {
+    guard let url = BackendConfig.aiAdvisorURL else {
+        throw AIError.invalidResponse(provider: "backend", details: "URL ai-advisor не сконфигурирован")
+    }
+    let body = AdvisorRequestBody(
+        prompt: prompt,
+        // L4 (#22): реальный анонимный per-install id вместо 'ios-device-id',
+        // иначе все юзеры делят один rate-limit-бакет (#17).
+        userId: AnonymousUserID.current,
+        imageBase64: imageBase64
+    )
+    // X-App-Token закрывает unauthenticated abuse (#20/#14).
+    return try await NetworkClient(timeout: 40).post(
+        url: url, body: body, headers: BackendConfig.authHeaders
+    )
+}
+
 extension AIAdvisorClient: DependencyKey {
     static let liveValue = AIAdvisorClient(
         getAdvice: { request in
-            let networkClient = NetworkClient()
             let prompt = request.buildYandexGPTPrompt()
-
-            // L5 (#22): URL функции берём из Info.plist (ключ AIVibeAIAdvisorURL),
-            // не хардкодим плейсхолдер your-function-url в бандл (Apple отклоняет такие билды).
-            // Если ключ не сконфигурирован — не ходим в сеть, бросаем ошибку.
-            guard let urlString = Bundle.main.object(forInfoDictionaryKey: "AIVibeAIAdvisorURL") as? String,
-                  let url = URL(string: urlString) else {
-                throw AIError.invalidResponse(provider: "backend", details: "URL ai-advisor не сконфигурирован")
-            }
-
-            let body = AdvisorRequestBody(
+            let response = try await postToAdvisor(
                 prompt: prompt,
-                // L4 (#22): реальный анонимный per-install id вместо 'ios-device-id',
-                // иначе все юзеры делят один rate-limit-бакет (#17).
-                userId: AnonymousUserID.current,
                 imageBase64: request.imageAsBase64() ?? ""
             )
-
-            // Backend требует X-App-Token (см. backend/functions/ai-advisor/index.js):
-            // закрывает unauthenticated abuse (#20/#14). Токен — из Info.plist (AIVibeAppToken).
-            var headers: [String: String] = [:]
-            if let appToken = Bundle.main.object(forInfoDictionaryKey: "AIVibeAppToken") as? String,
-               !appToken.isEmpty {
-                headers["X-App-Token"] = appToken
-            }
-
-            let response: AdvisorResponseBody = try await networkClient.post(url: url, body: body, headers: headers)
             return DesignAdvice.parse(from: response.text, provider: response.provider)
+        },
+        getChatReply: { question in
+            // Лёгкая роль-преамбула: ответ по теме приложения, без JSON-схем.
+            let prompt = """
+            Ты — ассистент по дизайну интерьеров в приложении AIVibe. \
+            Отвечай по-русски, кратко и практично (3–6 предложений), \
+            с конкретными советами по мебели и планировке.
+
+            Вопрос пользователя: \(question)
+            """
+            let response = try await postToAdvisor(prompt: prompt, imageBase64: "")
+            return AdvisorChatMessage(
+                text: response.text,
+                provider: response.provider,
+                isUser: false
+            )
         }
     )
 }
