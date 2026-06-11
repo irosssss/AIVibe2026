@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Образец локальной конфигурации бэкенда.
+	     Скопируйте в BackendConfig.plist (тот же каталог) и заполните.
+	     BackendConfig.plist в .gitignore — НЕ коммитится (репозиторий публичный).
+	     URL функций: https://functions.yandexcloud.net/<id> (см. yc serverless function list).
+	     Токен: значение APP_TOKEN из Yandex Lockbox (aivibe-secrets). -->
+	<key>AIVibeAIAdvisorURL</key>
+	<string></string>
+	<key>AIVibeMarketplaceURL</key>
+	<string></string>
+	<key>AIVibeAppToken</key>
+	<string></string>
+</dict>
+</plist>

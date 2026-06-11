@@ -51,8 +51,17 @@ public struct ARDesignerFeature: Sendable {
             self.sheetMode = sheetMode
             self.isApprovalPresented = isApprovalPresented
             self.budgetMax = budgetMax
-            self.prices = prices
+            // Цены: явные (параметр) приоритетнее, иначе из предметов плана —
+            // их заполняет резолвер каталога (B4) в AgentOrchestrator.
+            self.prices = prices.isEmpty ? Self.pricesFromItems(designPlan.items) : prices
             self.isRefining = false
+        }
+
+        /// Цены предметов плана (заполнены резолвером каталога B4).
+        static func pricesFromItems(_ items: [FurnitureItem]) -> [FurnitureItem.ID: Int] {
+            Dictionary(uniqueKeysWithValues: items.compactMap { item in
+                item.price.map { (item.id, $0) }
+            })
         }
 
         public var totalPrice: Int {
@@ -150,6 +159,7 @@ public struct ARDesignerFeature: Sendable {
                 state.isRefining = false
                 state.designPlan = newPlan
                 state.items = IdentifiedArray(uniqueElements: newPlan.items)
+                state.prices = State.pricesFromItems(newPlan.items)
                 state.selectedItemID = nil
                 state.collisionReport = nil
                 return .none

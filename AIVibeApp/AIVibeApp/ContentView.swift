@@ -238,25 +238,32 @@ struct ContentView: View {
 
     // MARK: - Mock conversion
 
-    /// Inline-карточка чата → `ProductDetail` из демо-каталога фабрик.
-    /// При подключении B4 данные придут из живого каталога по артикулу.
+    /// Inline-карточка чата → `ProductDetail`: габариты из живого каталога (B4),
+    /// демо-стаб — фолбэк для 3D-модели из бандла и имени фабрики.
     private func productFor(_ item: ChatFurnitureItem) -> ProductDetail {
         let catalogItem = item.article.flatMap { PartnerCatalogStub.item(article: $0) }
+        let brand: String
+        if let catalogItem {
+            brand = "Фабрика «\(catalogItem.factory)» · арт. \(catalogItem.article)"
+        } else if let article = item.article {
+            brand = "Каталог фабрик · арт. \(article)"
+        } else {
+            brand = "Фабрика-партнёр"
+        }
         return ProductDetail(
             market: item.market,
-            brand: catalogItem.map { "Фабрика «\($0.factory)» · арт. \($0.article)" }
-                ?? "Фабрика-партнёр",
+            brand: brand,
             title: item.title,
             price: item.price,
             rating: 4.8, reviews: 124,
-            width: catalogItem?.widthCm ?? 240,
-            depth: catalogItem?.depthCm ?? 95,
-            height: catalogItem?.heightCm ?? 82,
+            width: item.widthCm ?? catalogItem?.widthCm ?? 240,
+            depth: item.depthCm ?? catalogItem?.depthCm ?? 95,
+            height: item.heightCm ?? catalogItem?.heightCm ?? 82,
             fitVerdict: "Помещается в вашу гостиную",
             fitDetail: "Займёт 58% свободного места у окна",
             aiCommentary: "Эта модель хорошо вписывается в выбранный стиль и помещается по габаритам.",
             aiProvider: "YandexGPT · design_advisor",
-            description: "Характеристики и материалы загрузятся из каталога фабрики при подключении живого каталога (B4).",
+            description: "Характеристики и материалы появятся в карточке после оцифровки каталога фабрики.",
             photoTone: item.tone,
             usdzFile: catalogItem?.usdzFile
         )

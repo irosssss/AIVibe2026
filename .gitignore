@@ -78,3 +78,6 @@ backend/tmp/
 # Codegraph (dev-инструмент навигации — локально, без коммита)
 .codegraph/
 .mcp.json
+
+# Локальная конфигурация бэкенда (URL функций + APP_TOKEN) — репозиторий публичный
+AIVibeApp/AIVibeApp/Resources/BackendConfig.plist

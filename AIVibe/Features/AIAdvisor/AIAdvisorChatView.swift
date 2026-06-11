@@ -99,14 +99,20 @@ struct AIAdvisorChatView: View {
                     ]
                 default:
                     toolCalls = []
-                    // После первого ответа AI показываем подборку из
-                    // демо-каталога фабрик (заменится результатами B4).
-                    if !store.chatMessages.isEmpty, inlineFurniture.isEmpty {
+                    // Фолбэк-подборка из демо-стаба — только если живой
+                    // каталог (B4) ничего не прислал.
+                    if !store.chatMessages.isEmpty, inlineFurniture.isEmpty,
+                       store.suggestedProducts.isEmpty {
                         inlineFurniture = PartnerCatalogStub
                             .chatShowcase(budgetRub: budget?.max)
                             .map(ChatFurnitureItem.init(catalogItem:))
                     }
                 }
+            }
+            .onChange(of: store.suggestedProducts) { _, products in
+                // Живая подборка партнёрского каталога под последний запрос (B4).
+                guard !products.isEmpty else { return }
+                inlineFurniture = products.prefix(6).map(ChatFurnitureItem.init(product:))
             }
         }
     }
@@ -342,19 +348,29 @@ public struct ChatFurnitureItem: Identifiable, Equatable, Sendable {
     public let market: AIMarket
     /// Артикул каталога фабрик (для карточки товара и 3D-модели).
     public let article: String?
+    /// Габариты из живого каталога, см (nil = брать из демо-стаба/дефолтов).
+    public let widthCm: Int?
+    public let depthCm: Int?
+    public let heightCm: Int?
 
     public init(
         title: String,
         price: Int,
         tone: AIPhotoTone,
         market: AIMarket,
-        article: String? = nil
+        article: String? = nil,
+        widthCm: Int? = nil,
+        depthCm: Int? = nil,
+        heightCm: Int? = nil
     ) {
         self.title = title
         self.price = price
         self.tone = tone
         self.market = market
         self.article = article
+        self.widthCm = widthCm
+        self.depthCm = depthCm
+        self.heightCm = heightCm
     }
 
     /// Карточка из позиции демо-каталога фабрик.
@@ -364,7 +380,24 @@ public struct ChatFurnitureItem: Identifiable, Equatable, Sendable {
             price: catalogItem.priceRub,
             tone: catalogItem.tone,
             market: .partner,
-            article: catalogItem.article
+            article: catalogItem.article,
+            widthCm: catalogItem.widthCm,
+            depthCm: catalogItem.depthCm,
+            heightCm: catalogItem.heightCm
+        )
+    }
+
+    /// Карточка из живого товара партнёрского каталога (B4).
+    public init(product: PartnerProduct) {
+        self.init(
+            title: product.name,
+            price: product.price ?? 0,
+            tone: furnitureTone(for: product.category),
+            market: .partner,
+            article: product.article,
+            widthCm: product.widthCm,
+            depthCm: product.depthCm,
+            heightCm: product.heightCm
         )
     }
 }

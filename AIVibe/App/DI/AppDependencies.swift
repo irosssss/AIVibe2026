@@ -10,10 +10,15 @@ import ComposableArchitecture
 
 public enum AppDependencies {
 
-    /// Создаёт live-р��утер с реальными провайдерами.
-    /// Вызывается один раз в AppEntry.swift при старте приложения.
+    /// Создаёт live-роутер с реальными провайдерами.
+    /// Порядок = приоритет fallback-цепочки:
+    ///   1. Backend — наш бэкенд (ai-advisor), единственный путь к живому AI
+    ///      на устройстве: ключей провайдеров в бандле нет (CLAUDE.md).
+    ///   2-3. Прямые YandexGPT/GigaChat — только при env-ключах (отладка/CI).
+    ///   4. CoreML — offline-фолбэк.
     public static func prepareLiveRouter() -> AIProviderRouter {
         let providers: [any AIProviderProtocol] = [
+            BackendAIProvider(),
             makeYandexGPT(),
             makeGigaChat(),
             CoreMLProvider()

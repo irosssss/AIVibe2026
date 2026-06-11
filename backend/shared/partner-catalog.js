@@ -60,7 +60,16 @@ export function toMarketplaceProduct(record) {
         usdzUrl: record.usdz_url ?? '',
         category: record.category ?? '',
         style: record.style ?? '',
+        // Габариты (см) — нужны B4: реальные размеры предмета в AR-расстановке
+        // и в карточке товара (вердикт «помещается»).
+        width_cm: toFiniteNumber(record.width_cm),
+        depth_cm: toFiniteNumber(record.depth_cm),
+        height_cm: toFiniteNumber(record.height_cm),
     };
+}
+
+function toFiniteNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 /**
