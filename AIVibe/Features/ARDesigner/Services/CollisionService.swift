@@ -34,32 +34,33 @@ public struct CollisionDetector: CollisionDetecting {
             }
         }
 
-        // Проверка выхода за периметр (допуск 5 см = 0.05 м)
+        // Проверка выхода за периметр (допуск 5 см = 0.05 м).
+        // A2: границы — реальный bbox по стенам (RoomGeometry.floorBounds),
+        // а не квадрат из площади: вытянутые комнаты больше не дают ложных срабатываний.
         let margin: Float = 0.05
-        let halfW = Float(sqrt(room.area)) / 2
-        let halfD = Float(sqrt(room.area)) / 2
+        let bounds = room.floorBounds
 
         for item in items {
-            let hw = item.size.x / 2
-            let hd = item.size.z / 2
+            let (hw, hd) = halfExtents(item)
             let minX = item.position.x - hw
             let maxX = item.position.x + hw
             let minZ = item.position.z - hd
             let maxZ = item.position.z + hd
 
-            if minX < -margin || maxX > 2 * halfW + margin ||
-               minZ < -margin || maxZ > 2 * halfD + margin {
+            if minX < bounds.minX - margin || maxX > bounds.maxX + margin ||
+               minZ < bounds.minZ - margin || maxZ > bounds.maxZ + margin {
                 outOfBounds.append(item)
             }
         }
 
         // Проверка свободной зоны перед дверями (норма из DesignNorms, см → м).
+        // Радиус — по большему полуразмеру следа (синхронизирован с ArrangementEngine).
         let doorClearance = Float(DesignNorms.doorClearanceFrontCm) / 100
         for door in room.doors {
             let doorPos = door.position
             let isBlocked = items.contains { item in
                 let dist = simd_length(item.position - doorPos)
-                return dist < doorClearance + item.size.x / 2
+                return dist < doorClearance + max(item.size.x, item.size.z) / 2
             }
             if isBlocked {
                 blockedDoors.append(door)
@@ -76,13 +77,25 @@ public struct CollisionDetector: CollisionDetecting {
 
     // MARK: - AABB с учётом rotation
 
+    /// Полуразмеры следа на полу с учётом поворота вокруг Y: при повороте,
+    /// близком к 90°/270°, ширина и глубина меняются местами.
+    /// A2: раньше поворот игнорировался — повёрнутый диван у боковой стены
+    /// давал ложные коллизии/выход за границы.
+    private func halfExtents(_ item: FurnitureItem) -> (hw: Float, hd: Float) {
+        let normalized = abs(item.rotation.truncatingRemainder(dividingBy: 180))
+        let isRotated = abs(normalized - 90) < 45
+        return isRotated
+            ? (item.size.z / 2, item.size.x / 2)
+            : (item.size.x / 2, item.size.z / 2)
+    }
+
     private func aabbOverlap(_ a: FurnitureItem, _ b: FurnitureItem) -> Bool {
         let minGap: Float = 0.05
+        let (ahw, ahd) = halfExtents(a)
+        let (bhw, bhd) = halfExtents(b)
         let dx = abs(a.position.x - b.position.x)
         let dz = abs(a.position.z - b.position.z)
-        let sumHW = (a.size.x + b.size.x) / 2 + minGap
-        let sumHD = (a.size.z + b.size.z) / 2 + minGap
-        return dx < sumHW && dz < sumHD
+        return dx < ahw + bhw + minGap && dz < ahd + bhd + minGap
     }
 }
 

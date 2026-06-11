@@ -38,6 +38,8 @@ public actor AgentOrchestrator {
     private let promptBuilder: any PromptBuilding
     private let parser: any DesignResponseParsing
     private let collisionDetector: any CollisionDetecting
+    /// A2: детерминированный движок расстановки — координаты считает он, не LLM.
+    private let arrangementEngine: ArrangementEngine
     private let analytics: any AnalyticsLogging
     /// Живой партнёрский каталог (B4): артикулы в промпт LLM + резолвер
     /// (габариты/цена/USDZ). nil = работаем без каталога (как раньше).
@@ -51,6 +53,7 @@ public actor AgentOrchestrator {
         promptBuilder: any PromptBuilding = PromptBuilder(),
         parser: any DesignResponseParsing = DesignResponseParser(),
         collisionDetector: any CollisionDetecting = CollisionDetector(),
+        arrangementEngine: ArrangementEngine = ArrangementEngine(),
         analytics: any AnalyticsLogging = NoopAnalytics(),
         catalogClient: PartnerCatalogClient? = nil
     ) {
@@ -60,6 +63,7 @@ public actor AgentOrchestrator {
         self.promptBuilder = promptBuilder
         self.parser = parser
         self.collisionDetector = collisionDetector
+        self.arrangementEngine = arrangementEngine
         self.analytics = analytics
         self.catalogClient = catalogClient
     }
@@ -143,6 +147,8 @@ public actor AgentOrchestrator {
             let response = try await aiRouter.complete(prompt: prompt)
             var refined = try parser.parse(response: response, providerName: response.providerName)
             refined = await enrichWithCatalog(refined)
+            // A2: после уточнения списка координаты тоже считает движок.
+            refined = arrangeWithEngine(refined, geometry: room)
 
             let report = collisionDetector.check(plan: refined, room: room)
             if !report.isClean {
@@ -168,25 +174,16 @@ public actor AgentOrchestrator {
         maxAttempts: Int
     ) async throws -> RoomDesignPlan {
         var lastError: Error?
-        var collisionInfo: String?
 
         // B4: блок каталога фабрик — LLM выбирает предметы по реальным
         // артикулам. Запрашивается один раз на все попытки; сбой каталога
         // не валит генерацию (работаем без артикулов, как раньше).
         let catalogBlock = await fetchCatalogPromptBlock(preferences: preferences)
 
+        // A2: retry остался только на сбои LLM/парсинга. Коллизии больше не
+        // лечатся перепромптом — координаты детерминированно считает движок.
         for attempt in 1...maxAttempts {
-            var prompt: AIPrompt
-            if let info = collisionInfo {
-                // Повторяем с описанием коллизий из предыдущей попытки
-                prompt = promptBuilder.buildRetryPrompt(
-                    geometry: geometry,
-                    preferences: preferences,
-                    collisionInfo: info
-                )
-            } else {
-                prompt = promptBuilder.buildDesignPrompt(geometry: geometry, preferences: preferences)
-            }
+            var prompt = promptBuilder.buildDesignPrompt(geometry: geometry, preferences: preferences)
             if let catalogBlock {
                 prompt = AIPrompt(
                     messages: prompt.messages + [ChatMessage(role: .user, content: catalogBlock)],
@@ -199,18 +196,15 @@ public actor AgentOrchestrator {
                 let response = try await aiRouter.complete(prompt: prompt)
                 var plan = try parser.parse(response: response, providerName: response.providerName)
                 plan = await enrichWithCatalog(plan)
+                plan = arrangeWithEngine(plan, geometry: geometry)
+
+                // Страховочная проверка: движок обязан давать чистый план;
+                // расхождение = баг рассинхрона движка и детектора, логируем.
                 let report = collisionDetector.check(plan: plan, room: geometry)
-
-                if report.isClean || attempt == maxAttempts {
-                    if !report.isClean {
-                        logger.warning("Попытка \(attempt)/\(maxAttempts): коллизии сохранились, возвращаем как есть")
-                    }
-                    return plan
+                if !report.isClean {
+                    logger.warning("A2: детектор не согласен с движком (\(report.collidingPairs.count) пар, \(report.itemsOutOfBounds.count) вне границ)")
                 }
-
-                // Формируем описание коллизий для следующей попытки
-                collisionInfo = buildCollisionDescription(report: report)
-                logger.info("Попытка \(attempt)/\(maxAttempts): \(report.collidingPairs.count) коллизий, retry")
+                return plan
 
             } catch {
                 lastError = error
@@ -222,6 +216,36 @@ public actor AgentOrchestrator {
             throw AgentError.designGenerationFailed(underlying: error)
         }
         throw AgentError.allRetriesExhausted(attempts: maxAttempts)
+    }
+
+    // MARK: - A2: расстановка движком
+
+    /// Заменяет координаты LLM на расчёт ArrangementEngine. Непоместившиеся
+    /// предметы честно убираются из плана с предупреждением в explanation.
+    private func arrangeWithEngine(_ plan: RoomDesignPlan, geometry: RoomGeometry) -> RoomDesignPlan {
+        let result = arrangementEngine.arrange(items: plan.items, room: geometry)
+
+        var explanation = plan.explanation
+        if !result.warnings.isEmpty {
+            explanation += "\n\n⚠️ " + result.warnings.joined(separator: "\n⚠️ ")
+        }
+
+        analytics.log(event: "arrangement_engine_used", params: [
+            "placed": result.placedItems.count,
+            "unplaced": result.unplacedItems.count
+        ])
+        if !result.unplacedItems.isEmpty {
+            logger.warning("A2: не поместилось \(result.unplacedItems.count) предметов из \(plan.items.count)")
+        }
+
+        return RoomDesignPlan(
+            id: plan.id,
+            items: result.placedItems,
+            explanation: explanation,
+            confidence: plan.confidence,
+            generatedAt: plan.generatedAt,
+            providerName: plan.providerName
+        )
     }
 
     // MARK: - B4: партнёрский каталог в пайплайне
@@ -323,21 +347,6 @@ public actor AgentOrchestrator {
         return product.usdzURLString
     }
 
-    private func buildCollisionDescription(report: CollisionReport) -> String {
-        var parts: [String] = []
-        if !report.collidingPairs.isEmpty {
-            let pairs = report.collidingPairs.map { "\($0.first.itemType) и \($0.second.itemType)" }
-            parts.append("Коллизии: \(pairs.joined(separator: "; "))")
-        }
-        if !report.itemsOutOfBounds.isEmpty {
-            let types = report.itemsOutOfBounds.map { $0.itemType }
-            parts.append("За пределами комнаты: \(types.joined(separator: ", "))")
-        }
-        if !report.blockedDoors.isEmpty {
-            parts.append("Заблокировано \(report.blockedDoors.count) дверей")
-        }
-        return parts.joined(separator: ". ")
-    }
 }
 
 // MARK: - TCA Dependency
