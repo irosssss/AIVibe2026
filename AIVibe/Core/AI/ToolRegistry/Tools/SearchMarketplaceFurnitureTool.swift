@@ -24,8 +24,9 @@ public struct FurnitureSearchResult: Sendable, Equatable, Codable {
     public let thumbnail: String
     /// Размеры в сантиметрах.
     public let dimensionsCm: FurnitureDimensions
-    /// Рейтинг (0–5).
-    public let rating: Float
+    /// Рейтинг (0–5). nil — отзывов нет; выдумывать значение запрещено (юр-риск),
+    /// фабрики-партнёры реальные отзывы пока не отдают.
+    public let rating: Float?
     /// В наличии.
     public let inStock: Bool
     /// Категория.
@@ -39,7 +40,7 @@ public struct FurnitureSearchResult: Sendable, Equatable, Codable {
         url: String,
         thumbnail: String,
         dimensionsCm: FurnitureDimensions,
-        rating: Float = 0,
+        rating: Float? = nil,
         inStock: Bool = true,
         category: FurnitureCategory = .other
     ) {
@@ -145,7 +146,9 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
     public let name = "search_marketplace_furniture"
     public let description = """
     Ищет мебель в каталоге фабрик-партнёров AIVibe по категории, стилю и бюджету.
-    Возвращает до 20 товаров с ценами, размерами, рейтингом и наличием.
+    Возвращает до 20 товаров с ценами, размерами и наличием.
+    Поле rating заполнено только при наличии реальных отзывов; если оно
+    отсутствует — рейтинг неизвестен, упоминать его в ответе нельзя.
     Поддерживает категории: sofa, table, chair, lamp, cabinet, decor, rug.
     Стили: scandinavian, modern, loft, classic, minimal.
     """
@@ -292,8 +295,8 @@ public struct SearchMarketplaceFurnitureTool: AgentTool {
                 url: "https://catalog.aivibe.example/product/\(itemId)",
                 thumbnail: "https://catalog.aivibe.example/img/\(itemId)_thumb.jpg",
                 dimensionsCm: dims,
-                rating: Float((hash + i) % 50) / 10.0, // 0.0–4.9
-                inStock: (hash + i) % 5 != 0,           // 80% в наличии
+                rating: nil, // реальных отзывов нет — синтетический рейтинг запрещён (юр-риск)
+                inStock: (hash + i) % 5 != 0, // 80% в наличии
                 category: categoryEnum
             ))
         }
