@@ -66,8 +66,8 @@ public struct HomeFeature: Sendable {
         public var ideas: [HomeIdea]
 
         public init(
-            userName: String = "Анна",
-            projects: [HomeProject] = HomeFeature.mockProjects,
+            userName: String = "",                 // реальное имя ещё не задано — приветствие без имени
+            projects: [HomeProject] = [],           // новый пользователь стартует без проектов (не фейковые «Гостиная/Кухня»)
             ideas: [HomeIdea] = HomeFeature.mockIdeas
         ) {
             self.userName = userName
@@ -126,7 +126,7 @@ public struct HomeFeature: Sendable {
         }
     }
 
-    // MARK: - Mock data (визуальная демонстрация по design ref)
+    // MARK: - Mock data (только для SwiftUI-preview и тестов; в живой State не подставляются)
 
     public static let mockProjects: [HomeProject] = [
         HomeProject(name: "Гостиная", tone: "sand", step: 3, totalSteps: 5,

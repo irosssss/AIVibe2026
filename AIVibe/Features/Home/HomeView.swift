@@ -46,13 +46,16 @@ public struct HomeView: View {
                             .padding(.horizontal, 16)
                             .padding(.top, 20)
 
-                        SectionHeader("Текущие проекты", trailing: "Все") {
-                            store.send(.allProjectsTapped)
-                        }
-                        .padding(.top, 24)
+                        // Секция проектов появляется только когда у пользователя есть проекты.
+                        if !store.projects.isEmpty {
+                            SectionHeader("Текущие проекты", trailing: "Все") {
+                                store.send(.allProjectsTapped)
+                            }
+                            .padding(.top, 24)
 
-                        projectsCarousel
-                            .padding(.bottom, 4)
+                            projectsCarousel
+                                .padding(.bottom, 4)
+                        }
 
                         SectionHeader("Идеи дня")
                             .padding(.top, 24)
@@ -115,16 +118,23 @@ public struct HomeView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    Text(String(store.userName.prefix(1)))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(c.onSurface)
+                    // Пока имя не задано — нейтральная иконка вместо инициала.
+                    if store.userName.isEmpty {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(c.onSurface)
+                    } else {
+                        Text(String(store.userName.prefix(1)))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(c.onSurface)
+                    }
                 }
                 .frame(width: 36, height: 36)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Профиль \(store.userName)")
+            .accessibilityLabel(store.userName.isEmpty ? "Профиль" : "Профиль \(store.userName)")
         }
     }
 
@@ -132,7 +142,7 @@ public struct HomeView: View {
 
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Привет, \(store.userName)")
+            Text(store.userName.isEmpty ? "Привет!" : "Привет, \(store.userName)")
                 .aiType(.largeTitle)
                 .foregroundStyle(c.onSurface)
             Text("Чем займёмся сегодня?")
