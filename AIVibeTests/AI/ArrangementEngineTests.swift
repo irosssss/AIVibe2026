@@ -194,6 +194,41 @@ final class ArrangementEngineTests: XCTestCase {
         XCTAssertLessThanOrEqual(dist, 2.0, "Журнальный стол должен быть у дивана")
     }
 
+    // MARK: - A2.5: выравнивание по оси дивана
+
+    /// Журнальный стол после доводки лежит на оси взгляда дивана:
+    /// одна из координат (X или Z) совпадает с центром дивана.
+    func testCoffeeTableAlignedToSofaAxis() throws {
+        let room = makeRoom()
+        let items = [
+            makeItem("диван", w: 2.2, h: 0.85, d: 0.95),
+            makeItem("журнальный стол", w: 0.9, h: 0.45, d: 0.6)
+        ]
+
+        let result = engine.arrange(items: items, room: room)
+        let sofa = try XCTUnwrap(result.placedItems.first { ArrangementCategory.from($0.itemType) == .sofa })
+        let table = try XCTUnwrap(result.placedItems.first { ArrangementCategory.from($0.itemType) == .coffeeTable })
+
+        let onAxis = min(abs(table.position.x - sofa.position.x), abs(table.position.z - sofa.position.z))
+        XCTAssertLessThanOrEqual(onAxis, 0.02, "Журнальный стол должен стоять на оси взгляда дивана")
+    }
+
+    /// ТВ-тумба после доводки тоже выровнена по оси дивана (диван смотрит на ТВ).
+    func testTVStandAlignedToSofaAxis() throws {
+        let room = makeRoom()
+        let items = [
+            makeItem("диван", w: 2.2, h: 0.85, d: 0.95),
+            makeItem("тумба под ТВ", w: 1.4, h: 0.5, d: 0.4)
+        ]
+
+        let result = engine.arrange(items: items, room: room)
+        let sofa = try XCTUnwrap(result.placedItems.first { ArrangementCategory.from($0.itemType) == .sofa })
+        let tv = try XCTUnwrap(result.placedItems.first { ArrangementCategory.from($0.itemType) == .tvStand })
+
+        let onAxis = min(abs(tv.position.x - sofa.position.x), abs(tv.position.z - sofa.position.z))
+        XCTAssertLessThanOrEqual(onAxis, 0.02, "ТВ-тумба должна стоять на оси взгляда дивана")
+    }
+
     // MARK: - Переполнение
 
     func testOverfilledRoomReportsUnplaced() {

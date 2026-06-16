@@ -174,7 +174,6 @@ public struct ArrangementEngine: Sendable {
 
         var placed: [PlacedItem] = []
         var unplaced: [FurnitureItem] = []
-        var warnings: [String] = []
 
         for item in ordered {
             let category = ArrangementCategory.from(item.itemType)
@@ -185,15 +184,33 @@ public struct ArrangementEngine: Sendable {
                 placed.append(best)
             } else {
                 unplaced.append(item)
-                warnings.append("«\(item.itemType)» не поместился — комната переполнена")
             }
         }
 
-        let result = placed.map { $0.toFurnitureItem() }
-        if occupiedShare(placed: placed, bounds: bounds) > 0.6 {
+        // A2.5 — доводка отжигом (Metropolis, фиксированное зерно: детерминизм сохранён).
+        // Гарантия: итог не хуже жадного решения — лучшее состояние отслеживается явно.
+        var refined = anneal(initial: placed, bounds: bounds, doorCenters: doorCenters, windowZones: windowZones)
+
+        // Повторная укладка непоместившегося: отжиг мог уплотнить расстановку и освободить место.
+        let reseat = reseatUnplaced(unplaced, into: refined, bounds: bounds, doorCenters: doorCenters, windowZones: windowZones)
+        refined = reseat.placed
+        let finalUnplaced = reseat.unplaced
+
+        // Выравнивание журнального стола и ТВ по оси взгляда дивана (эстетика «зоны отдыха»).
+        refined = alignToSofaAxis(refined, bounds: bounds, doorCenters: doorCenters, windowZones: windowZones)
+
+        var warnings: [String] = []
+        for item in finalUnplaced {
+            warnings.append("«\(item.itemType)» не поместился — комната переполнена")
+        }
+        if occupiedShare(placed: refined, bounds: bounds) > 0.6 {
             warnings.append("Мебель занимает более 60% пола — комната может казаться загромождённой")
         }
-        return ArrangementEngineResult(placedItems: result, unplacedItems: unplaced, warnings: warnings)
+        return ArrangementEngineResult(
+            placedItems: refined.map { $0.toFurnitureItem() },
+            unplacedItems: finalUnplaced,
+            warnings: warnings
+        )
     }
 }
 
@@ -543,5 +560,200 @@ extension ArrangementEngine {
             .filter { $0.category != .rug }
             .reduce(Float(0)) { $0 + $1.footW * $1.footD }
         return occupied / floorArea
+    }
+}
+
+// MARK: - Детерминированный ГПСЧ (SplitMix64)
+
+/// Быстрый воспроизводимый генератор. Зерно фиксировано в движке → один вход даёт
+/// один выход (требование детерминизма A2). Не для криптографии.
+private struct SplitMix64 {
+    private var state: UInt64
+
+    init(seed: UInt64) { state = seed }
+
+    mutating func nextU64() -> UInt64 {
+        state = state &+ 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+
+    /// Равномерно в [0, 1).
+    mutating func unit() -> Double {
+        Double(nextU64() >> 11) * (1.0 / Double(1 << 53))
+    }
+
+    /// Равномерный индекс в [0, count).
+    mutating func index(below count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return Int(nextU64() % UInt64(count))
+    }
+}
+
+// MARK: - Переходы между размещениями (для отжига и выравнивания)
+
+extension PlacedItem {
+    /// Тот же предмет на месте кандидата (центр + поворот + след).
+    func moved(to c: Candidate) -> PlacedItem {
+        PlacedItem(
+            item: item, category: category,
+            centerX: c.centerX, centerZ: c.centerZ, rotation: c.rotation,
+            footW: c.footW, footD: c.footD
+        )
+    }
+
+    /// Тот же предмет со смещённым центром (поворот и след без изменений).
+    func withCenter(x: Float, z: Float) -> PlacedItem {
+        PlacedItem(
+            item: item, category: category,
+            centerX: x, centerZ: z, rotation: rotation,
+            footW: footW, footD: footD
+        )
+    }
+
+    /// Представление текущего размещения как кандидата (для проверок и стоимости).
+    var asCandidate: Candidate {
+        Candidate(centerX: centerX, centerZ: centerZ, rotation: rotation, footW: footW, footD: footD)
+    }
+}
+
+// MARK: - A2.5: отжиг, повторная укладка, выравнивание по дивану
+
+extension ArrangementEngine {
+
+    /// Суммарная «энергия» расстановки: стоимость каждого предмета относительно
+    /// остальных. Минимум — самое гармоничное размещение. Та же функция стоимости,
+    /// что и в жадной фазе → отжиг улучшает по той же метрике.
+    private func totalEnergy(_ state: [PlacedItem], bounds: FloorBounds) -> Float {
+        var energy: Float = 0
+        for i in state.indices {
+            var others = state
+            let p = others.remove(at: i)
+            energy += placementCost(
+                p.asCandidate, item: p.item, category: p.category, bounds: bounds, placed: others
+            )
+        }
+        return energy
+    }
+
+    /// Имитация отжига поверх жадного решения. Случайно переставляет один предмет
+    /// в допустимую позицию, принимает ухудшения по критерию Метрополиса (чтобы
+    /// выбираться из локальных тупиков жадности), но ВОЗВРАЩАЕТ лучшее найденное
+    /// состояние — поэтому результат гарантированно не хуже входного.
+    private func anneal(
+        initial: [PlacedItem],
+        bounds: FloorBounds,
+        doorCenters: [SIMD2<Float>],
+        windowZones: [(zone: FloorZone, sillHeight: Float)]
+    ) -> [PlacedItem] {
+        // Меньше двух предметов — переставлять нечего (жадная фаза уже оптимальна).
+        guard initial.count >= 2 else { return initial }
+
+        var rng = SplitMix64(seed: 0xA1B2_C3D4_E5F6_0717)
+        var current = initial
+        var currentEnergy = totalEnergy(current, bounds: bounds)
+        var best = current
+        var bestEnergy = currentEnergy
+
+        let iterations = min(1200, max(200, current.count * 80))
+        var temperature = 1.5
+        // Геометрическое охлаждение: к концу прогона T ≈ 0.02 от старта.
+        let cooling = pow(0.02, 1.0 / Double(iterations))
+
+        for _ in 0..<iterations {
+            defer { temperature *= cooling }
+
+            let i = rng.index(below: current.count)
+            let subject = current[i]
+            // Ковры не перемешиваем отжигом: они зонируют под мебелью, у них своя логика.
+            if subject.category == .rug { continue }
+
+            let candidates = generateCandidates(for: subject.item, category: subject.category, bounds: bounds)
+            guard !candidates.isEmpty else { continue }
+            let candidate = candidates[rng.index(below: candidates.count)]
+
+            var others = current
+            others.remove(at: i)
+            guard isFeasible(
+                candidate, item: subject.item, bounds: bounds, placed: others,
+                doorCenters: doorCenters, windowZones: windowZones
+            ) else { continue }
+
+            var trial = current
+            trial[i] = subject.moved(to: candidate)
+            let trialEnergy = totalEnergy(trial, bounds: bounds)
+            let delta = Double(trialEnergy - currentEnergy)
+
+            // Метрополис: улучшение принимаем всегда, ухудшение — с вероятностью exp(−Δ/T).
+            if delta <= 0 || rng.unit() < exp(-delta / max(temperature, 1e-6)) {
+                current = trial
+                currentEnergy = trialEnergy
+                if trialEnergy < bestEnergy {
+                    best = trial
+                    bestEnergy = trialEnergy
+                }
+            }
+        }
+        return best
+    }
+
+    /// Повторная попытка разместить непоместившиеся предметы в уплотнённой отжигом
+    /// расстановке. Порядок входа сохранён → детерминизм.
+    private func reseatUnplaced(
+        _ unplaced: [FurnitureItem],
+        into state: [PlacedItem],
+        bounds: FloorBounds,
+        doorCenters: [SIMD2<Float>],
+        windowZones: [(zone: FloorZone, sillHeight: Float)]
+    ) -> (placed: [PlacedItem], unplaced: [FurnitureItem]) {
+        var placed = state
+        var stillUnplaced: [FurnitureItem] = []
+        for item in unplaced {
+            let category = ArrangementCategory.from(item.itemType)
+            if let best = bestPlacement(
+                for: item, category: category, bounds: bounds,
+                placed: placed, doorCenters: doorCenters, windowZones: windowZones
+            ) {
+                placed.append(best)
+            } else {
+                stillUnplaced.append(item)
+            }
+        }
+        return (placed, stillUnplaced)
+    }
+
+    /// Журнальный стол и ТВ-тумбу подравнивает по оси взгляда дивана: их боковую
+    /// координату подтягивает к центру дивана, чтобы «зона отдыха» смотрелась по оси.
+    /// Снап применяется только если позиция остаётся допустимой.
+    private func alignToSofaAxis(
+        _ state: [PlacedItem],
+        bounds: FloorBounds,
+        doorCenters: [SIMD2<Float>],
+        windowZones: [(zone: FloorZone, sillHeight: Float)]
+    ) -> [PlacedItem] {
+        guard let sofa = state.first(where: { $0.category == .sofa }) else { return state }
+        var result = state
+        for idx in result.indices {
+            let p = result[idx]
+            guard p.category == .coffeeTable || p.category == .tvStand else { continue }
+
+            // Диван у дальней/ближней стены (поворот 0/180) смотрит вдоль Z → ровняем X;
+            // у боковой стены (90/270) смотрит вдоль X → ровняем Z.
+            let facesAlongZ = (sofa.rotation == 0 || sofa.rotation == 180)
+            let snapped = facesAlongZ
+                ? p.withCenter(x: sofa.centerX, z: p.centerZ)
+                : p.withCenter(x: p.centerX, z: sofa.centerZ)
+
+            var others = result
+            others.remove(at: idx)
+            guard isFeasible(
+                snapped.asCandidate, item: snapped.item, bounds: bounds, placed: others,
+                doorCenters: doorCenters, windowZones: windowZones
+            ) else { continue }
+            result[idx] = snapped
+        }
+        return result
     }
 }
