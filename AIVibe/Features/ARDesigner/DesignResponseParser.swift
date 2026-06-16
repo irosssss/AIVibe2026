@@ -129,14 +129,13 @@ public struct DesignResponseParser: DesignResponseParsing {
             guard let itemType = type else {
                 throw DesignResponseError.missingRequiredFields("itemType")
             }
-            guard let rawPos = rawItem.position else {
-                throw DesignResponseError.missingRequiredFields("position")
-            }
 
+            // A2: координаты LLM не запрашиваются (их считает ArrangementEngine).
+            // Если LLM всё же прислала position — терпимо парсим, движок перезапишет.
             let position = SIMD3<Float>(
-                Float(rawPos.x ?? 0),
-                Float(rawPos.y ?? 0),
-                Float(rawPos.z ?? 0)
+                Float(rawItem.position?.x ?? 0),
+                Float(rawItem.position?.y ?? 0),
+                Float(rawItem.position?.z ?? 0)
             )
 
             let size: SIMD3<Float>
