@@ -60,8 +60,21 @@ public struct ProductDetailView: View {
             }
             .fullScreenCover(isPresented: $isARQuickLookPresented) {
                 if let url = bundledUSDZURL(for: store.product.usdzFile) {
-                    ARQuickLookView(fileURL: url)
-                        .ignoresSafeArea()
+                    // QLPreviewController в SwiftUI-обёртке НЕ показывает системную
+                    // кнопку «Done» — без своей из AR-примерки не выйти (фидбек владельца
+                    // 2026-06-16: «можно только перетаскивать, выйти нечем»).
+                    // Крестик — сиблинг в ZStack, поэтому уважает safe-area и сам встаёт
+                    // ниже «острова» (без угаданных отступов — урок прошлого AR-фикса).
+                    ZStack(alignment: .topLeading) {
+                        ARQuickLookView(fileURL: url)
+                            .ignoresSafeArea()
+                        pillButton("xmark", label: "Закрыть") {
+                            Haptics.light()
+                            isARQuickLookPresented = false
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 12)
+                    }
                 }
             }
         }
