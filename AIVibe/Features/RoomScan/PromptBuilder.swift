@@ -59,11 +59,6 @@ public struct UserFeedback: Codable, Sendable {
 public protocol PromptBuilding: Sendable {
     func buildDesignPrompt(geometry: RoomGeometry, preferences: UserDesignPreferences) -> AIPrompt
     func buildRefinePrompt(currentDesign: RoomDesignPlan, feedback: UserFeedback) -> AIPrompt
-    func buildRetryPrompt(
-        geometry: RoomGeometry,
-        preferences: UserDesignPreferences,
-        collisionInfo: String
-    ) -> AIPrompt
 }
 
 // MARK: - Реализация
@@ -74,18 +69,20 @@ public struct PromptBuilder: PromptBuilding {
 
     // MARK: Системный промпт (строительные нормы + JSON-схема)
 
+    // A2: LLM подбирает СПИСОК мебели и объясняет замысел; координаты и повороты
+    // считает детерминированный ArrangementEngine — position/rotation в схеме нет.
     private static let systemPrompt = """
-    Ты — эксперт по дизайну интерьеров. Ты помогаешь расставить мебель в комнате.
-    Строительные нормы (обязательные):
-    - Минимальная ширина прохода: не менее \(DesignNorms.minPassageCm) см (основные проходы — \(DesignNorms.mainPassageCm) см).
-    - Расстояние от мебели до стен: не менее \(DesignNorms.furnitureToWallCm) см.
-    - Путь эвакуации к двери всегда свободен.
+    Ты — эксперт по дизайну интерьеров. Ты подбираешь НАБОР мебели для комнаты и объясняешь замысел.
+    Расстановкой по координатам занимается приложение — координаты НЕ указывай.
+    Учитывай нормы: проход не менее \(DesignNorms.minPassageCm) см (основные — \(DesignNorms.mainPassageCm) см), путь к двери свободен.
+    Подбирай реалистичное число предметов: мебель должна помещаться в указанную площадь с проходами.
     Формат ответа: ТОЛЬКО валидный JSON без markdown-обёртки.
     JSON схема: { "items": [...], "explanation": "...", "confidence": 0.0–1.0 }
-    Каждый item: { "itemType": "...", "brand": "...", "article": "...", "position": {"x":0,"y":0,"z":0}, "rotation": 0.0, "usdz_url": "", "size": {"x":0,"y":0,"z":0} }
+    Каждый item: { "itemType": "...", "brand": "...", "article": "", "usdz_url": "", "size": {"x":0,"y":0,"z":0} }
+    Поле itemType — тип предмета по-русски («диван», «журнальный стол», «кровать», «прикроватная тумбочка»...).
     Поле article — артикул из каталога фабрик-партнёров, если он приложен к запросу; не выдумывай артикулы. Поле usdz_url всегда оставляй пустой строкой.
     Размеры (size) в метрах: x=ширина, y=высота, z=глубина.
-    Координаты (position) в метрах от угла комнаты (0,0,0).
+    В explanation объясни выбор мебели и стиль (2–4 предложения, по-русски).
     """
 
     // MARK: - Промпт для нового дизайна
@@ -131,7 +128,7 @@ public struct PromptBuilder: PromptBuilding {
             userContent += "Пожелания пользователя: \(text)\n\n"
         }
 
-        userContent += "Улучши дизайн, учитывая обратную связь. Верни полный JSON с обновлённым расположением."
+        userContent += "Улучши дизайн, учитывая обратную связь. Верни полный JSON с обновлённым набором мебели (без координат)."
 
         return AIPrompt(
             messages: [
@@ -139,26 +136,6 @@ public struct PromptBuilder: PromptBuilding {
                 ChatMessage(role: .user, content: userContent)
             ],
             temperature: 0.5,
-            maxTokens: 2000
-        )
-    }
-
-    // MARK: - Повторный промпт при коллизиях
-
-    public func buildRetryPrompt(
-        geometry: RoomGeometry,
-        preferences: UserDesignPreferences,
-        collisionInfo: String
-    ) -> AIPrompt {
-        let base = buildUserContent(geometry: geometry, preferences: preferences)
-        let retryContent = base + "\n\nПРЕДЫДУЩАЯ ПОПЫТКА НЕУДАЧНА:\n\(collisionInfo)\n\nИсправь расстановку, устрани коллизии."
-
-        return AIPrompt(
-            messages: [
-                ChatMessage(role: .system, content: Self.systemPrompt),
-                ChatMessage(role: .user, content: retryContent)
-            ],
-            temperature: 0.4,
             maxTokens: 2000
         )
     }
@@ -209,7 +186,7 @@ public struct PromptBuilder: PromptBuilding {
         }
 
         lines.append("")
-        lines.append("Расставь мебель и верни JSON.")
+        lines.append("Подбери мебель и верни JSON.")
 
         return lines.joined(separator: "\n")
     }

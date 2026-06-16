@@ -124,8 +124,47 @@ struct ContentView: View {
                 .tag(Tab.ar)
             }
             .tint(AIColors.light.terracotta)
-            .onAppear { openDemoProductIfRequested() }
+            .onAppear {
+                openDemoProductIfRequested()
+                openDemoDesignIfRequested()
+            }
         }
+    }
+
+    /// `-DemoDesign` — скриптовые скриншоты (как `-StartTab`): комната 5×3 м
+    /// + мебель демо-каталога, координаты считает ArrangementEngine (A2),
+    /// AR-экран открывается сразу с готовым планом. Без сети и LLM.
+    private func openDemoDesignIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-DemoDesign"),
+              let geometry = try? RoomGeometry.manualRectangular(widthM: 5.0, depthM: 3.0, heightM: 2.7) else {
+            return
+        }
+        let articles = ["TEST-SOFA-001", "TEST-TABLE-002", "TEST-WARD-003", "TEST-ARMCH-001"]
+        let items = articles.compactMap { PartnerCatalogStub.item(article: $0) }.map { catalogItem in
+            FurnitureItem(
+                itemType: catalogItem.name,
+                brand: "Фабрика «\(catalogItem.factory)»",
+                article: catalogItem.article,
+                position: .zero,
+                rotation: 0,
+                size: SIMD3<Float>(
+                    Float(catalogItem.widthCm) / 100,
+                    Float(catalogItem.heightCm) / 100,
+                    Float(catalogItem.depthCm) / 100
+                ),
+                usdzURL: catalogItem.usdzFile,
+                price: catalogItem.priceRub
+            )
+        }
+        let result = ArrangementEngine().arrange(items: items, room: geometry)
+        pendingDesignPlan = RoomDesignPlan(
+            items: result.placedItems,
+            explanation: "Демо-план: координаты рассчитаны движком ArrangementEngine (A2).",
+            confidence: 1.0,
+            providerName: "ArrangementEngine"
+        )
+        pendingRoomGeometry = geometry
+        selectedTab = .ar
     }
 
     /// `-DemoProduct <артикул>` — скриптовые скриншоты (как `-StartTab`):
