@@ -50,11 +50,13 @@ final class PersistenceReducerTests: XCTestCase {
         }
     }
 
-    /// Home: на первом запуске (пусто) стартовый набор сохраняется как seed.
+    /// Home: на первом запуске (пусто) текущий набор проектов сохраняется как seed.
+    /// Живой дефолт State пуст (без фейковых проектов), поэтому стартовый набор
+    /// задаём явно — проверяем сам механизм seed.
     func testHomeOnAppearSeedsWhenEmpty() async {
         let storage = InMemoryStorageClient()
 
-        let store = TestStore(initialState: HomeFeature.State()) {
+        let store = TestStore(initialState: HomeFeature.State(projects: HomeFeature.mockProjects)) {
             HomeFeature()
         } withDependencies: {
             $0.storageClient = storage
@@ -65,5 +67,21 @@ final class PersistenceReducerTests: XCTestCase {
         await store.finish()
         let seeded: [HomeProject]? = try? storage.load(forKey: HomeFeature.projectsKey)
         XCTAssertEqual(seeded, HomeFeature.mockProjects)
+    }
+
+    /// Home: новый пользователь (пустой живой State) НЕ получает фейковых проектов в хранилище.
+    func testHomeOnAppearDoesNotSeedFakeProjects() async {
+        let storage = InMemoryStorageClient()
+
+        let store = TestStore(initialState: HomeFeature.State()) {
+            HomeFeature()
+        } withDependencies: {
+            $0.storageClient = storage
+        }
+
+        await store.send(.onAppear)
+        await store.finish()
+        let seeded: [HomeProject]? = try? storage.load(forKey: HomeFeature.projectsKey)
+        XCTAssertEqual(seeded, [])
     }
 }

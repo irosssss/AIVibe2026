@@ -13,13 +13,18 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
     public let price: Int
     public let oldPrice: Int?
     public let discountPercent: Int?
-    public let rating: Double          // 4.8
-    public let reviews: Int            // 124
+    /// Рейтинг/отзывы — только из реального источника. У каталога фабрик их нет → nil,
+    /// блок не показывается. Синтетический рейтинг запрещён (юр-риск, закон о рекламе).
+    public let rating: Double?
+    public let reviews: Int?
     public let width: Int              // см
     public let depth: Int
     public let height: Int
-    public let fitVerdict: String      // "Помещается в вашу гостиную"
-    public let fitDetail: String       // "Займёт 58% свободного места у окна"
+    /// Вердикт помещаемости — только из реального расчёта геометрии (габариты товара vs комната).
+    /// Нет расчёта → nil, карточка не показывается (без непроверённого «Помещается»).
+    public let fitVerdict: String?
+    /// Деталь подгонки из расчёта геометрии. Нет реального расчёта → nil (никаких выдуманных «%»).
+    public let fitDetail: String?
     public let aiCommentary: String
     public let aiProvider: String      // "YandexGPT · design_advisor"
     public let description: String
@@ -34,13 +39,13 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         price: Int,
         oldPrice: Int? = nil,
         discountPercent: Int? = nil,
-        rating: Double,
-        reviews: Int,
+        rating: Double? = nil,
+        reviews: Int? = nil,
         width: Int,
         depth: Int,
         height: Int,
-        fitVerdict: String,
-        fitDetail: String,
+        fitVerdict: String? = nil,
+        fitDetail: String? = nil,
         aiCommentary: String,
         aiProvider: String,
         description: String,
@@ -75,11 +80,11 @@ public struct ProductDetail: Equatable, Hashable, Sendable {
         price: 45_990,
         oldPrice: 56_990,
         discountPercent: 19,
-        rating: 4.8,
-        reviews: 124,
+        rating: nil,        // у каталога фабрик нет реальных отзывов
+        reviews: nil,
         width: 240, depth: 95, height: 82,
         fitVerdict: "Помещается в вашу гостиную",
-        fitDetail: "Займёт 58% свободного места у окна",
+        fitDetail: nil,     // реального расчёта свободного места нет — без выдуманных «%»
         aiCommentary: "Этот диван подходит к скандинавскому стилю вашей гостиной. Светлая льняная обивка визуально расширит пространство. Подушки можно стирать.",
         aiProvider: "YandexGPT · design_advisor",
         description: "Угловой диван-кровать с механизмом «дельфин». Обивка — лён 80%, хлопок 20%, плотность 230 г/м². Каркас из массива берёзы, наполнение — пружинный блок Bonnel плюс холлофайбер.",

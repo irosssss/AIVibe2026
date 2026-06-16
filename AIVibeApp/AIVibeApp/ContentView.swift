@@ -65,7 +65,9 @@ struct ContentView: View {
                 // — Таб 2: AI-помощник
                 NavigationStack(path: $chatPath) {
                     AIAdvisorScreen(
-                        budget: BudgetSnapshot(current: 245_000, max: 350_000),
+                        // Бюджет пользователя ещё не задан — без выдуманных 245 000/350 000.
+                        // ИИ-советник работает без жёсткого лимита, пока бюджет не введён реально.
+                        budget: nil,
                         onProductTap: { item in
                             chatPath.append(AppRoute.productDetail(productFor(item)))
                         }
@@ -294,12 +296,11 @@ struct ContentView: View {
             brand: brand,
             title: item.title,
             price: item.price,
-            rating: 4.8, reviews: 124,
+            // rating/reviews/fitVerdict/fitDetail НЕ задаём: реальных отзывов и расчёта
+            // помещаемости для чат-товара нет → блоки скрываются (никаких выдуманных данных).
             width: item.widthCm ?? catalogItem?.widthCm ?? 240,
             depth: item.depthCm ?? catalogItem?.depthCm ?? 95,
             height: item.heightCm ?? catalogItem?.heightCm ?? 82,
-            fitVerdict: "Помещается в вашу гостиную",
-            fitDetail: "Займёт 58% свободного места у окна",
             aiCommentary: "Эта модель хорошо вписывается в выбранный стиль и помещается по габаритам.",
             aiProvider: "YandexGPT · design_advisor",
             description: "Характеристики и материалы появятся в карточке после оцифровки каталога фабрики.",

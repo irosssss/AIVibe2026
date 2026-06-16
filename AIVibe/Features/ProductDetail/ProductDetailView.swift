@@ -194,7 +194,10 @@ public struct ProductDetailView: View {
     private var bodyContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             titleBlock
-            fitCard
+            // Карточку помещаемости показываем только при реальном вердикте расчёта.
+            if let verdict = store.product.fitVerdict {
+                fitCard(verdict: verdict)
+            }
             dimensionsSection
             aiCommentSection
             descriptionSection
@@ -233,22 +236,25 @@ public struct ProductDetailView: View {
             }
             .padding(.top, 12)
 
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(c.amber)
-                Text(String(format: "%.1f", store.product.rating))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(c.onSurface)
-                Text("· \(store.product.reviews) \(declension(store.product.reviews))")
-                    .aiType(.callout)
-                    .foregroundStyle(c.onSurfaceMuted)
+            // Рейтинг показываем только при реальных отзывах (см. ProductDetail.rating).
+            if let rating = store.product.rating, let reviews = store.product.reviews {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(c.amber)
+                    Text(String(format: "%.1f", rating))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(c.onSurface)
+                    Text("· \(reviews) \(declension(reviews))")
+                        .aiType(.callout)
+                        .foregroundStyle(c.onSurfaceMuted)
+                }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
         }
     }
 
-    private var fitCard: some View {
+    private func fitCard(verdict: String) -> some View {
         Button {
             store.send(.fitCardTapped)
         } label: {
@@ -266,12 +272,14 @@ public struct ProductDetailView: View {
                 .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(store.product.fitVerdict)
+                    Text(verdict)
                         .aiType(.headline)
                         .foregroundStyle(c.onSurface)
-                    Text(store.product.fitDetail)
-                        .aiType(.caption)
-                        .foregroundStyle(c.onSurfaceMuted)
+                    if let fitDetail = store.product.fitDetail {
+                        Text(fitDetail)
+                            .aiType(.caption)
+                            .foregroundStyle(c.onSurfaceMuted)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
