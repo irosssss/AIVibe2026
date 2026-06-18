@@ -28,11 +28,17 @@ public actor USDZLoader {
     private let diskCacheURL: URL
     private let logger = Logger(label: "ar.usdz-loader")
     private static let maxDiskCacheMB: Int = 200
-    // Лимит на один скачиваемый USDZ (F4): без него удалённый файл мог бы
-    // исчерпать память. Компромисс: проверяем заявленный (Content-Length) и
-    // фактический размер; сервер, лгущий о размере и стримящий больше, всё ещё
-    // буферизуется URLSession. Путь апгрейда — потоковая загрузка с обрывом по байтам.
+    // Лимит на один скачиваемый USDZ (F4): потоковая загрузка обрывается на этом
+    // размере, поэтому в памяти максимум maxFileBytes даже при заниженном/отсутствующем
+    // Content-Length.
     private static let maxFileBytes: Int = 50 * 1_024 * 1_024
+
+    // Allowlist хостов, с которых разрешено грузить USDZ (E2). Должен соответствовать
+    // origin каталога — Yandex Object Storage, бакет aivibe-models (path-style
+    // storage.yandexcloud.net и virtual-hosted <bucket>.storage.yandexcloud.net).
+    // Позитивный allowlist закрывает SSRF через DNS-rebinding / *.nip.io: неизвестный
+    // хост отвергается ДО резолва, как бы он ни резолвился. При смене CDN — дополнить.
+    private static let allowedHostSuffixes: [String] = ["storage.yandexcloud.net"]
 
     // Сессия без следования редиректам (см. NoRedirectSessionDelegate).
     private let session = URLSession(
@@ -103,7 +109,7 @@ public actor USDZLoader {
         do {
             // session не следует редиректам (NoRedirectSessionDelegate) — иначе
             // 302 мог бы обойти isSafeRemoteHost.
-            let (data, response) = try await session.data(from: url)
+            let (byteStream, response) = try await session.bytes(for: URLRequest(url: url))
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
                 logger.warning(
@@ -111,12 +117,23 @@ public actor USDZLoader {
                 )
                 return nil
             }
-            // F4: отбрасываем слишком большой файл — по заголовку Content-Length
-            // и по фактическому размеру.
-            if httpResponse.expectedContentLength > Int64(Self.maxFileBytes)
-                || data.count > Self.maxFileBytes {
-                logger.warning("USDZ превышает лимит размера (\(data.count) Б) — пропуск")
+            // F4: ранний отказ по заявленному Content-Length — не читаем тело вовсе.
+            if httpResponse.expectedContentLength > Int64(Self.maxFileBytes) {
+                logger.warning("USDZ заявил размер больше лимита — пропуск")
                 return nil
+            }
+            // Потоково накапливаем с жёстким обрывом на лимите: в памяти максимум
+            // maxFileBytes, поэтому сервер, занизивший/опустивший Content-Length и
+            // стримящий больше, обрывается по факту (выход из цикла отменяет загрузку).
+            // Компромисс: побайтовое чтение; апгрейд при необходимости — чанковый делегат.
+            var data = Data()
+            data.reserveCapacity(min(Int(max(httpResponse.expectedContentLength, 0)), Self.maxFileBytes))
+            for try await byte in byteStream {
+                data.append(byte)
+                if data.count > Self.maxFileBytes {
+                    logger.warning("USDZ превысил лимит \(Self.maxFileBytes) Б при загрузке — обрыв")
+                    return nil
+                }
             }
             try data.write(to: localURL)
             enforceDiskCacheLimit()
@@ -132,32 +149,13 @@ public actor USDZLoader {
         return Bundle.main.url(forResource: name, withExtension: "usdz")
     }
 
-    /// Допускаем только HTTPS и не приватный/loopback/link-local хост (защита от SSRF).
+    /// SSRF-защита: грузим только по HTTPS и только с разрешённых хостов каталога.
+    /// Позитивный allowlist (а не чёрный список приватных IP) надёжнее — он отвергает
+    /// неизвестный хост ДО DNS-резолва, поэтому rebinding / *.nip.io не проходят.
     private func isSafeRemoteHost(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "https",
               let host = url.host?.lowercased(), !host.isEmpty else { return false }
-        if host == "localhost" || host.hasSuffix(".local") { return false }
-        if Self.isPrivateOrReservedIP(host) { return false }
-        return true
-    }
-
-    /// true, если host — IP-литерал из приватного/loopback/link-local/CGNAT диапазона.
-    private static func isPrivateOrReservedIP(_ host: String) -> Bool {
-        if host.contains(":") {
-            // IPv6-литерал: для CDN-каталога нехарактерен → перестраховка, режем все.
-            return true
-        }
-        let parts = host.split(separator: ".")
-        guard parts.count == 4 else { return false } // домен, не IPv4-литерал
-        let octets = parts.compactMap { Int($0) }
-        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
-        let oct0 = octets[0], oct1 = octets[1]
-        if oct0 == 0 || oct0 == 127 || oct0 == 10 { return true }       // this-host / loopback / private
-        if oct0 == 169 && oct1 == 254 { return true }                   // link-local
-        if oct0 == 192 && oct1 == 168 { return true }                   // private
-        if oct0 == 172 && (16...31).contains(oct1) { return true }      // private
-        if oct0 == 100 && (64...127).contains(oct1) { return true }     // CGNAT
-        return false
+        return Self.allowedHostSuffixes.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 
     private func sha256(_ string: String) -> String {

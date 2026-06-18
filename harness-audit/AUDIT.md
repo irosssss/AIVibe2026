@@ -37,10 +37,12 @@ AIVibe. Каждый пункт проверен по файлам; статус
 ### Исправлено 2026-06-18 (код-фиксы, проверены build + swiftlint --strict)
 
 - ✅ **[HIGH · E2]** `USDZLoader`: сессия без следования редиректам (`NoRedirectSessionDelegate`) +
-  `isSafeRemoteHost` (только HTTPS; отказ приватным/loopback/link-local/CGNAT хостам) → редирект
-  больше не уведёт на внутренний адрес. `USDZLoader.swift`.
-- ✅ **[MED · F4]** `USDZLoader`: лимит 50 МБ на один USDZ (по `Content-Length` и фактическому
-  размеру) поверх LRU-кэша 200 МБ → нет неограниченной загрузки в память. `USDZLoader.swift`.
+  **позитивный allowlist хостов** каталога (`storage.yandexcloud.net`) — неизвестный хост отвергается
+  ДО DNS-резолва, поэтому rebinding / `*.nip.io` не обходят защиту. `USDZLoader.swift`.
+  *(уточнено по ревью Codex P2: literal-IP-blacklist заменён на allowlist.)*
+- ✅ **[MED · F4]** `USDZLoader`: **потоковая загрузка с жёстким обрывом на 50 МБ** (ранний отказ по
+  `Content-Length` + обрыв по факту) → в памяти максимум лимита даже при заниженном Content-Length.
+  Поверх LRU-кэша 200 МБ. *(уточнено по ревью Codex P2: буферизация заменена на стрим.)* `USDZLoader.swift`.
 - ✅ **[PII]** `LangfuseExporter`: `userId`/`user_id` в метаданных псевдонимизируются (SHA-256,
   `redactPII`) перед экспортом наружу. `LangfuseExporter.swift`.
 
@@ -149,9 +151,10 @@ AIVibe. Каждый пункт проверен по файлам; статус
   fetch с пользовательским/контентным URL — все эндпоинты захардкожены
   (`yandexgpt.js:105`, `gigachat.js:65`, `apify-client.js:5`); metadata `169.254.169.254` —
   хардкод, платформенный `yandexgpt.js:35-38`. Риск SSRF, на который нацелен пункт, отсутствует.
-- **[HIGH · E2 · pass · RT]** Редиректы апстрима: ✅ исправлено — `USDZLoader` использует сессию с
-  `NoRedirectSessionDelegate` (не следует редиректам) + `isSafeRemoteHost` (только HTTPS; отказ
-  приватным/loopback/link-local/CGNAT) `USDZLoader.swift`. Backend node fetch — фикс-хосты, риск низкий.
+- **[HIGH · E2 · pass · RT]** Редиректы апстрима: ✅ исправлено — `USDZLoader` использует сессию без
+  следования редиректам (`NoRedirectSessionDelegate`) + **позитивный allowlist хостов каталога**
+  (`storage.yandexcloud.net`): неизвестный хост отвергается до DNS-резолва → DNS-rebinding / `*.nip.io`
+  не обходят защиту `USDZLoader.swift`. Backend node fetch — фикс-хосты, риск низкий.
 - **[HIGH · E3 · n/a]** Формы по недоверенным ссылкам: у агента нет инструмента сабмита форм/вебом;
   dev-политика link-safety — `AGENTS.md §5`.
 - **[MED · E4 · pass · RT]** Нет отправки данных на эндпоинты из контента: egress фиксирован; RAG —
@@ -164,9 +167,10 @@ AIVibe. Каждый пункт проверен по файлам; статус
 - **[HIGH · F2 · n/a]** CSP на превью: веб-превью нет → CSP не нужен.
 - **[HIGH · F3 · n/a]** Артефакты не зовут внутренние API: USDZ — это геометрия без исполнения
   скриптов; сетевых вызовов делать не может.
-- **[MED · F4 · pass · RT]** Закалка против огромного ввода: ✅ исправлено — лимит 50 МБ на один USDZ
-  (по `Content-Length` и фактическому размеру) поверх LRU-кэша 200 МБ `USDZLoader.swift`. Разбор
-  USDZ — нативный RealityKit, закалён Apple.
+- **[MED · F4 · pass · RT]** Закалка против огромного ввода: ✅ исправлено — **потоковая загрузка с
+  жёстким обрывом на 50 МБ** (ранний отказ по `Content-Length` + обрыв по факту), память ≤ лимита
+  даже при заниженном Content-Length; поверх LRU-кэша 200 МБ `USDZLoader.swift`. Разбор USDZ —
+  нативный RealityKit, закалён Apple.
 
 ## G · Состояние, персистентность, владение данными
 
