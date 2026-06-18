@@ -4,6 +4,7 @@
 // Активируется только при наличии LANGFUSE_PUBLIC_KEY и LANGFUSE_SECRET_KEY в LockBox.
 
 import Foundation
+import CryptoKit
 import Logging
 
 // MARK: - Langfuse Exporter
@@ -112,10 +113,10 @@ public actor LangfuseExporter {
             traceId: traceId,
             name: name,
             startTime: ISO8601DateFormatter().string(from: Date()),
-            metadata: metadata.merging([
+            metadata: redactPII(metadata.merging([
                 "model": model,
                 "duration_ms": String(format: "%.2f", durationMs)
-            ]) { _, new in new },
+            ]) { _, new in new }),
             input: input,
             output: output,
             model: model,
@@ -162,6 +163,29 @@ public actor LangfuseExporter {
 
     // MARK: - Private
 
+    /// Ключи метаданных, чьи значения содержат идентификатор пользователя (PII).
+    /// Перед экспортом наружу (Langfuse) заменяем их на стабильный необратимый хеш.
+    private static let piiMetadataKeys: Set<String> = ["user_id", "userId", "userID"]
+
+    /// Псевдонимизирует PII-значения в метаданных перед отправкой в Langfuse.
+    private func redactPII(_ metadata: [String: String]) -> [String: String] {
+        guard metadata.contains(where: { Self.piiMetadataKeys.contains($0.key) }) else { return metadata }
+        var out = metadata
+        for key in metadata.keys where Self.piiMetadataKeys.contains(key) {
+            out[key] = Self.pseudonymize(out[key] ?? "")
+        }
+        return out
+    }
+
+    /// Стабильный псевдоним: "u_" + 12 hex символов SHA-256. Необратим, но один и
+    /// тот же userId всегда даёт один хеш — корреляция в аналитике сохраняется.
+    private static func pseudonymize(_ value: String) -> String {
+        guard !value.isEmpty else { return value }
+        let digest = SHA256.hash(data: Data(value.utf8))
+        let hex = digest.prefix(6).map { String(format: "%02x", $0) }.joined()
+        return "u_\(hex)"
+    }
+
     private func scheduleFlush() {
         flushTask?.cancel()
         flushTask = Task {
@@ -206,7 +230,7 @@ public actor LangfuseExporter {
             traceId: traceId,
             name: record.eventType.rawValue,
             startTime: ISO8601DateFormatter().string(from: record.timestamp),
-            metadata: record.metadata,
+            metadata: redactPII(record.metadata),
             input: record.toolName,
             output: record.resultSize.map { String($0) },
             model: record.providerName,
