@@ -12,6 +12,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION, XL_TICK_MARK
+from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.oxml.ns import qn
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -550,7 +551,7 @@ cd.add_series("LTV / CAC", (0.3, 5.0, 6.0))
 gf = s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(0.7), Inches(2.1), Inches(6.6), Inches(4.3), cd)
 ch = gf.chart; ch.has_legend = False; ch.has_title = False
 plot = ch.plots[0]; plot.gap_width = 90; plot.has_data_labels = True
-plot.data_labels.number_format = '0.0'; plot.data_labels.number_format_is_linked = False
+plot.data_labels.number_format = '0.0"×"'; plot.data_labels.number_format_is_linked = False
 plot.data_labels.font.size = Pt(13); plot.data_labels.font.bold = True; plot.data_labels.font.color.rgb = INK
 ser = plot.series[0]
 for idx, pt in enumerate(ser.points):
@@ -560,6 +561,7 @@ cat_ax = ch.category_axis; cat_ax.tick_labels.font.size = Pt(11); cat_ax.tick_la
 cat_ax.tick_labels.font.color.rgb = INK
 val_ax = ch.value_axis; val_ax.minimum_scale = 0; val_ax.maximum_scale = 8
 val_ax.has_major_gridlines = True; val_ax.tick_labels.font.size = Pt(10); val_ax.tick_labels.font.color.rgb = MUTED
+val_ax.tick_labels.number_format = '0"×"'; val_ax.tick_labels.number_format_is_linked = False
 # правая колонка пояснений
 box(s, 7.8, 2.1, 4.8, 4.3, fill=WHITE, line=LINE, lw=1.0, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.05)
 text(s, 8.1, 2.4, 4.2, 0.5, "Норма здоровья: LTV / CAC ≥ 3", size=15, color=INK, bold=True, font=HEAD)
@@ -572,7 +574,9 @@ text(s, 8.1, 3.1, 4.2, 3.0,
       [("и устойчива к росту цен на AI (движок —", {})],
       [("вычисление, а не запрос к нейросети).", {})]],
      size=12.5, color=INKTX, leading=1.25)
-text(s, 0.7, 6.6, 11.9, 0.3, "Значения — середины диапазонов из разбора; иллюстрация, не обещание.",
+text(s, 0.7, 6.6, 11.9, 0.3,
+     "× = во сколько раз пожизненная ценность клиента (LTV) покрывает стоимость привлечения (CAC); норма ≥ 3. "
+     "Значения — середины диапазонов из разбора, иллюстрация, не обещание.",
      size=10, color=MUTED)
 footer(s, 14)
 
@@ -584,18 +588,25 @@ months = [f"М{m}" for m in range(1, 25)]
 revenue = [0,0,0,0,99,186,294,423,599,794,1010,1240,1489,1754,2033,2332,2646,2979,3328,3691,4069,4461,4869,5291]
 costs   = [626,626,626,626,1136,1148,1165,1186,1211,1700,1734,1772,1815,1862,1912,1968,2028,2092,2160,2233,2309,2390,2474,2562]
 cd2 = CategoryChartData(); cd2.categories = months
-cd2.add_series("Выручка, тыс ₽/мес", revenue)
-cd2.add_series("Затраты, тыс ₽/мес", costs)
+cd2.add_series("Выручка", revenue)
+cd2.add_series("Затраты", costs)
 gf2 = s.shapes.add_chart(XL_CHART_TYPE.LINE, Inches(0.7), Inches(2.05), Inches(8.4), Inches(4.4), cd2)
 ch2 = gf2.chart; ch2.has_title = False
 ch2.has_legend = True; ch2.legend.position = XL_LEGEND_POSITION.TOP; ch2.legend.include_in_layout = False
 ch2.legend.font.size = Pt(11); ch2.legend.font.bold = True
 s1, s2 = ch2.plots[0].series
 s1.format.line.color.rgb = KEEP; s1.format.line.width = Pt(2.75)
+# Затраты — пунктиром: график читается и в Ч/Б (различие не только цветом)
 s2.format.line.color.rgb = KILL; s2.format.line.width = Pt(2.5)
+s2.format.line.dash_style = MSO_LINE_DASH_STYLE.DASH
 ca = ch2.category_axis; ca.tick_labels.font.size = Pt(7); ca.tick_labels.font.color.rgb = MUTED
 va = ch2.value_axis; va.tick_labels.font.size = Pt(9); va.tick_labels.font.color.rgb = MUTED
 va.has_major_gridlines = True; va.minimum_scale = 0
+va.tick_labels.number_format = '#,##0'; va.tick_labels.number_format_is_linked = False
+# подпись оси значений — даёт базу каждой цифре (что это за величина и период)
+va.has_title = True; va.axis_title.text_frame.text = "тыс ₽ / мес"
+_vt = va.axis_title.text_frame.paragraphs[0].runs[0].font
+_vt.size = Pt(10); _vt.bold = True; _vt.color.rgb = MUTED; _vt.name = HEAD
 # вынос — безубыточность
 box(s, 9.4, 2.3, 3.2, 1.85, fill=RGBColor(0xE4,0xEF,0xEA), line=KEEP, lw=1.2, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.06)
 text(s, 9.65, 2.5, 2.75, 0.5, "Безубыточность", size=14, color=KEEP, bold=True, font=HEAD)
