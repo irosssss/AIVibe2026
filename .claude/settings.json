@@ -61,5 +61,20 @@
       "Read(**/.ssh/**)",
       "Read(**/Lockbox/**)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' 2>/dev/null); [ -z \"$f\" ] && exit 0; case \"$f\" in *.js|*.mjs|*.cjs) command -v node >/dev/null 2>&1 || exit 0; out=$(node --check \"$f\" 2>&1) || { printf '[hook] node --check провалился: %s\\n%s\\n' \"$f\" \"$out\" >&2; exit 2; } ;; *.swift) command -v swiftlint >/dev/null 2>&1 || exit 0; out=$(swiftlint lint --quiet \"$f\" 2>&1) || { printf '[hook] swiftlint: %s\\n%s\\n' \"$f\" \"$out\" >&2; exit 2; } ;; esac; exit 0",
+            "statusMessage": "Быстрая проверка синтаксиса изменённого файла",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
