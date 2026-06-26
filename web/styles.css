@@ -1,0 +1,307 @@
+/* ============================================================
+   AIVibe — Design System layer
+   "Neo Deco × глассморфизм, тёмная тема"
+   Все цвета/радиусы/тени — токены. Меняешь здесь — меняется везде.
+   ============================================================ */
+
+:root {
+  /* ---- Surfaces ---- */
+  --bg-base: #0E0A10;          /* фон страницы */
+  --bg-deep: #0A070C;          /* глубже фона (футер, провалы) */
+  --surface: #241726;          /* Plum Noir — карточки */
+  --surface-2: #2E1E31;        /* приподнятая поверхность */
+
+  /* ---- Glass ---- */
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-2: rgba(255, 255, 255, 0.04);
+  --glass-blur: 12px;
+  --hairline: rgba(244, 238, 242, 0.10);   /* тонкая хромовая линия */
+  --hairline-2: rgba(244, 238, 242, 0.06);
+
+  /* ---- Accents ---- */
+  --accent: #E2552B;           /* Persimmon — CTA */
+  --accent-soft: #F0764F;
+  --accent-2: #1F8A6B;         /* Jade — успех / AR */
+  --info: #6B9BE8;             /* Cool Blue */
+  --chart: #A6B24E;            /* Wasabi — графики */
+
+  /* ---- Text ---- */
+  --text: #F4EEF2;
+  --muted: rgba(244, 238, 242, 0.62);
+  --faint: rgba(244, 238, 242, 0.40);
+
+  /* ---- Radii ---- */
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 24px;
+  --r-xl: 32px;
+  --r-pill: 999px;
+
+  /* ---- Shadow / glow ---- */
+  --shadow-card: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 30px 90px rgba(0, 0, 0, 0.55);
+  --glow-accent: 0 0 40px rgba(226, 85, 43, 0.35);
+  --glow-jade: 0 0 32px rgba(31, 138, 107, 0.35);
+
+  /* ---- Type ---- */
+  --font-display: "Onest", system-ui, sans-serif;
+  --font-body: "Manrope", system-ui, sans-serif;
+
+  /* ---- Layout ---- */
+  --maxw: 1320px;
+  --gutter: clamp(20px, 4vw, 56px);
+  --nav-h: 76px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Атмосферный фон: тонкая сетка + плум-завихрения */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(60% 50% at 18% 0%, rgba(226, 85, 43, 0.10), transparent 60%),
+    radial-gradient(50% 50% at 92% 12%, rgba(107, 155, 232, 0.08), transparent 60%),
+    radial-gradient(55% 45% at 70% 100%, rgba(31, 138, 107, 0.08), transparent 60%),
+    var(--bg-base);
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--hairline-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hairline-2) 1px, transparent 1px);
+  background-size: 88px 88px;
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 80%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+::selection { background: rgba(226, 85, 43, 0.32); color: #fff; }
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: #3a2a3d; border-radius: 99px; border: 3px solid var(--bg-deep); }
+::-webkit-scrollbar-thumb:hover { background: #4a3650; }
+
+/* ============================================================
+   Утилиты
+   ============================================================ */
+.container { width: min(var(--maxw), 100% - var(--gutter) * 2); margin-inline: auto; }
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--hairline);
+}
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.eyebrow.jade { color: var(--accent-2); }
+.eyebrow.info { color: var(--info); }
+.eyebrow.wasabi { color: var(--chart); }
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+/* кнопки */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  border-radius: var(--r-pill);
+  padding: 14px 24px;
+  font-weight: 700;
+  font-size: 15px;
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #1a0d08; box-shadow: var(--glow-accent); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 56px rgba(226,85,43,.5); }
+.btn-ghost { background: var(--glass); border: 1px solid var(--hairline); color: var(--text); }
+.btn-ghost:hover { transform: translateY(-2px); border-color: rgba(244,238,242,.28); background: var(--glass-2); }
+.btn-block { width: 100%; }
+
+/* фокус-кольцо для доступности */
+:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 3px; border-radius: 6px; }
+
+/* generic fade-in on scroll */
+.reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* viewport-height утилита: vh-фолбэк + dvh (без скачков из-за адресной строки на iOS) */
+.minh-screen { min-height: 100vh; min-height: 100dvh; }
+
+/* шиммер-скелетон загрузки (а-ля App Store / Linear) */
+.skel { position: relative; overflow: hidden; background: var(--glass-2); }
+.skel::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(244,238,242,.07), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; scroll-behavior: auto !important; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .skel::after { display: none; }
+}
+
+/* высокий контраст: усиливаем тонкие линии и приглушённый текст */
+@media (prefers-contrast: more) {
+  :root {
+    --hairline: rgba(244, 238, 242, 0.30);
+    --hairline-2: rgba(244, 238, 242, 0.18);
+    --muted: rgba(244, 238, 242, 0.82);
+    --faint: rgba(244, 238, 242, 0.62);
+  }
+}
+
+/* striped placeholder для отсутствующих картинок */
+.ph {
+  background:
+    repeating-linear-gradient(135deg, rgba(244,238,242,.05) 0 10px, rgba(244,238,242,.02) 10px 20px),
+    var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--faint);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+/* ============================================================
+   ПРОМО-САЙТ — раскладки и анимации
+   ============================================================ */
+@keyframes floatA { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-14px) } }
+@keyframes floatB { 0%,100% { transform: translateY(0) } 50% { transform: translateY(16px) } }
+@keyframes sweep { 0% { top: -10%; opacity: 0 } 20% { opacity: 1 } 80% { opacity: 1 } 100% { top: 100%; opacity: 0 } }
+.float-a { animation: floatA 7s ease-in-out infinite; }
+.float-b { animation: floatB 8s ease-in-out infinite; }
+.scan-sweep { animation: sweep 4.5s ease-in-out infinite; }
+
+/* Bento */
+.bento {
+  margin-top: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 168px;
+  gap: 16px;
+}
+.bento-card {
+  position: relative; overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(var(--glass-blur));
+  transition: transform .35s cubic-bezier(.2,.7,.2,1), border-color .35s;
+}
+.bento-card:hover { transform: translateY(-5px); border-color: rgba(244,238,242,.24); }
+.bento-body { position: relative; z-index: 2; height: 100%; padding: 26px; display: flex; flex-direction: column; }
+.bento-body h3 { font-size: 21px; font-weight: 700; margin: 14px 0 8px; letter-spacing: -0.01em; }
+.bento-body p { color: var(--muted); font-size: 14.5px; line-height: 1.55; max-width: 42ch; }
+.b-lg .bento-body { justify-content: flex-end; }
+.b-lg .bento-body h3 { font-size: 28px; }
+.bento-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14,10,16,.15) 0%, rgba(14,10,16,.82) 100%); z-index: 1; }
+.bento-badge { position: absolute; top: 18px; right: 18px; z-index: 3; padding: 6px 13px; border-radius: 99px; font-size: 12px; font-weight: 700; border: 1px solid; }
+
+/* News */
+.news-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.news-card { transition: transform .35s cubic-bezier(.2,.7,.2,1), border-color .35s; }
+.news-card:hover { transform: translateY(-5px); border-color: rgba(244,238,242,.22); }
+.news-card img, .news-card .ph { transition: transform .5s ease; }
+.news-card:hover img { transform: scale(1.05); }
+.arch-node { transition: transform .25s, border-color .25s; }
+.arch-node:hover { transform: translateX(4px); }
+
+/* ---- "Как это работает" — мобильный свайп-степпер (scroll-snap) ---- */
+.how-scroller {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100%;
+  gap: 16px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; margin-top: 28px;
+}
+.how-scroller::-webkit-scrollbar { display: none; }
+.how-slide { scroll-snap-align: center; display: flex; flex-direction: column; gap: 16px; }
+.how-dots { display: flex; gap: 4px; justify-content: center; margin-top: 22px; }
+.how-dots button { height: 26px; display: flex; align-items: center; padding: 0 5px; background: none; }
+.how-dots button i { display: block; width: 8px; height: 8px; border-radius: 99px; background: var(--surface-2); transition: width .35s cubic-bezier(.2,.7,.2,1), background .35s; }
+.how-dots button.on i { width: 28px; background: var(--accent-2); }
+
+/* ---- Responsive ---- */
+@media (max-width: 1000px) {
+  .hero-grid, .how-grid, .github-grid { grid-template-columns: 1fr !important; }
+  .hero-visual { height: 440px !important; }
+  .bento { grid-template-columns: repeat(2, 1fr); }
+  .bento-card.b-lg { grid-column: span 2 !important; grid-row: span 2 !important; }
+  .bento-card.b-wide { grid-column: span 2 !important; }
+  .news-grid { grid-template-columns: repeat(2, 1fr); }
+  .news-card { grid-column: span 1 !important; }
+  .footer-grid { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 720px) {
+  .site-navlinks { display: none !important; }
+  .site-cta { display: none !important; }
+  .bento { grid-template-columns: 1fr; }
+  .bento-card, .bento-card.b-lg, .bento-card.b-wide { grid-column: span 1 !important; grid-row: auto !important; min-height: 200px; }
+  .news-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr !important; }
+  .hero-visual { display: none; }
+}
+
+/* ---- Мобильное меню (бургер + выпадающий лист) ---- */
+/* .icon-btn задаёт display:grid и грузится позже — поэтому селектор должен
+   быть специфичнее (.icon-btn.nav-burger), иначе бургер виден на десктопе. */
+.icon-btn.nav-burger { display: none; }
+.nav-sheet  { display: none; }
+@media (max-width: 720px) {
+  .icon-btn.nav-burger { display: grid; }
+  .nav-sheet {
+    display: block;
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: rgba(14, 10, 16, 0.94);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--hairline);
+    padding-inline: var(--gutter);
+    max-height: 0; overflow: hidden;
+    transition: max-height .4s cubic-bezier(.2, .7, .2, 1);
+  }
+  .nav-sheet[data-open="1"] { max-height: 78vh; }
+}
