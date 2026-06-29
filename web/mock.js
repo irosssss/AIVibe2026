@@ -42,7 +42,7 @@
       { id: "p_2", name: "Спальня — тёплый минимализм", room: "Спальня", style: "Тёплый минимализм", area: 18, items: 8, budget: 210000, updated: "2026-05-19", cover: "bedroom", status: "Готов" },
       { id: "p_3", name: "Кухня-столовая", room: "Кухня", style: "Сканди", area: 22, items: 15, budget: 365000, updated: "2026-05-11", cover: "kitchen", status: "В работе" },
       { id: "p_4", name: "Домашний кабинет", room: "Кабинет", style: "Индустриальный", area: 12, items: 6, budget: 145000, updated: "2026-04-30", cover: "office", status: "Архив" },
-      { id: "p_kirova", name: "Кирова 17к1", room: "3 комнаты · 87,59 м²", style: "По дизайн-проекту", area: 88, items: 44, budget: 2700000, updated: "2025-01-30", cover: "living", status: "В работе" },
+      { id: "p_kirova", name: "Кирова 17к1", room: "3 комнаты · 87,59 м²", style: "По дизайн-проекту", area: 87.59, items: 50, budget: 2700000, updated: "2025-01-30", cover: "living", status: "В работе" },
     ],
 
     // избранные товары (мудборд + шоп-лист)
