@@ -86,5 +86,53 @@
     return true;
   }
 
-  window.AIVibePDF = { exportSpec };
+  // Многокомнатная смета-комплектация (реальный дизайн-проект): разделы по комнатам.
+  function exportRoomSpec({ project, area, rooms, grand, markupPct, clientTotal, budget }) {
+    if (!window.pdfMake) { alert("PDF-библиотека ещё загружается — попробуйте через секунду."); return false; }
+    const content = [
+      { columns: [ { text: "AIVibe", style: "logo" }, { text: "Смета-комплектация", alignment: "right", style: "muted", margin: [0, 6, 0, 0] } ] },
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: "#E2552B" }], margin: [0, 8, 0, 0] },
+      { text: project || "Проект", style: "h1", margin: [0, 14, 0, 2] },
+      { text: "Комплектация по дизайн-проекту · " + (area || "—") + " м²", style: "muted", margin: [0, 0, 0, 14] },
+    ];
+    (rooms || []).forEach((r) => {
+      const sub = r.items.reduce((s, it) => s + it.price * (it.qty || 1), 0);
+      content.push({ text: r.name + (r.area ? "   ·   " + r.area + " м²" : ""), style: "h2", margin: [0, 12, 0, 4] });
+      content.push({
+        table: { headerRows: 0, widths: ["*", 60, 32, "auto"], body: r.items.map((it) => [
+          it.title,
+          { text: it.cat || "", color: "#8A8088", fontSize: 9 },
+          { text: "×" + (it.qty || 1), alignment: "right", fontSize: 9, color: "#8A8088" },
+          { text: money(it.price * (it.qty || 1)), alignment: "right" },
+        ]) },
+        layout: { hLineWidth: () => 0.5, hLineColor: () => "#EFEAE4", vLineWidth: () => 0, paddingTop: () => 3.5, paddingBottom: () => 3.5 },
+      });
+      content.push({ columns: [ { text: "", width: "*" }, { text: "Итого по комнате: " + money(sub), alignment: "right", bold: true, fontSize: 10.5, margin: [0, 4, 0, 0] } ] });
+    });
+    const over = grand > budget;
+    content.push({ canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#E5E0DA" }], margin: [0, 14, 0, 8] });
+    content.push({ columns: [
+      { text: over ? "Превышение бюджета на " + money(grand - budget) : "В рамках бюджета (" + money(budget) + ")", color: over ? "#B45309" : "#2F7A52", fontSize: 10, margin: [0, 6, 0, 0] },
+      { stack: [ { text: "Себестоимость: " + money(grand), alignment: "right", fontSize: 11 }, { text: "Для клиента (+" + markupPct + "%): " + money(clientTotal), alignment: "right", style: "total" } ] },
+    ] });
+    content.push({ text: "Комплектация (мебель, техника, сантехника, свет, текстиль). Ремонтные работы и отделочные материалы — отдельной сметой. Цены — рыночный ориентир. Документ сформирован в AIVibe.", style: "foot", margin: [0, 16, 0, 0] });
+
+    const doc = {
+      pageMargins: [40, 46, 40, 44],
+      content,
+      styles: {
+        logo: { fontSize: 18, bold: true, color: "#E2552B" },
+        h1: { fontSize: 20, bold: true, color: "#1A1417" },
+        h2: { fontSize: 12, bold: true, color: "#3A3338" },
+        muted: { color: "#8A8088", fontSize: 10 },
+        total: { fontSize: 14, bold: true, color: "#1A1417" },
+        foot: { fontSize: 8, color: "#B0A8AE" },
+      },
+      defaultStyle: { fontSize: 10, color: "#241A26" },
+    };
+    window.pdfMake.createPdf(doc).download("smeta-" + String(project || "aivibe").replace(/\s+/g, "-").toLowerCase() + ".pdf");
+    return true;
+  }
+
+  window.AIVibePDF = { exportSpec, exportRoomSpec };
 })();

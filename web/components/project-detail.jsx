@@ -106,6 +106,7 @@ function ProjectDetail({ id, onClose, initialStyle }) {
     AIVibeAPI.projects.get(id).then((d) => {
       if (!alive) return;
       setData(d);
+      if (d.rooms) return; // проект-квартира: смета-комплектация по комнатам (отдельный рендер)
       const match = initialStyle && d.styles.find((s) => s.id === initialStyle);
       setStyleId((match || d.styles.find((s) => s.active) || d.styles[0]).id);
       setSel(pickByTier(d.catalog, "opt"));
@@ -137,6 +138,8 @@ function ProjectDetail({ id, onClose, initialStyle }) {
       </div>
     );
   }
+
+  if (data.rooms) return <RoomSpecOverlay data={data} onClose={onClose} />;
 
   const activeStyle = data.styles.find((s) => s.id === styleId) || data.styles[0];
   const activeLayout = LAYOUTS.find((l) => l.id === layoutId) || LAYOUTS[0];
@@ -189,6 +192,96 @@ function ProjectDetail({ id, onClose, initialStyle }) {
       </div>
 
       <button className="pd-chat-fab" onClick={() => setChatOpen(true)} style={{ display: chatOpen ? "none" : undefined }}><I.chat size={19} />AI-дизайнер</button>
+    </div>
+  );
+}
+
+/* ---------------- СМЕТА-КОМПЛЕКТАЦИЯ ПО КОМНАТАМ (реальный дизайн-проект) ---------------- */
+function RoomSpecOverlay({ data, onClose }) {
+  const [markup, setMarkup] = usePD(25);
+  const rooms = data.rooms || [];
+  const roomTotal = (r) => r.items.reduce((s, it) => s + it.price * (it.qty || 1), 0);
+  const grand = rooms.reduce((s, r) => s + roomTotal(r), 0);
+  const client = Math.round(grand * (1 + markup / 100));
+  const itemsCount = rooms.reduce((s, r) => s + r.items.length, 0);
+  const over = grand > data.budget;
+  const exportPDF = () => { if (window.AIVibePDF && AIVibePDF.exportRoomSpec) AIVibePDF.exportRoomSpec({ project: data.name, area: data.area, rooms, grand, markupPct: markup, clientTotal: client, budget: data.budget }); };
+
+  return (
+    <div className="pd-overlay" role="dialog" aria-label={"Смета: " + data.name}>
+      <header className="pd-head">
+        <button className="icon-btn" onClick={onClose} title="Назад к проектам" aria-label="Назад"><I.arrow size={18} style={{ transform: "rotate(180deg)" }} /></button>
+        <div className="pd-title" style={{ flex: 1 }}>
+          <h2>{data.name}</h2>
+          <div className="pd-sub">Комплектация по дизайн-проекту · {data.area} м² · {itemsCount} позиций</div>
+        </div>
+        <span className="glass" style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 99, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <I.wallet size={15} style={{ color: "var(--accent-2)" }} />Бюджет {fmtMoney(data.budget)}
+        </span>
+      </header>
+
+      <div className="pd-body">
+        <div className="pd-main">
+          <section className="pd-section" style={{ borderBottom: "none" }}>
+            <div className="pd-eyebrow"><span className="dot" />Спецификация-комплектация</div>
+            <h3 className="pd-h">Смета по комнатам</h3>
+            <p style={{ color: "var(--muted)", fontSize: 14.5, marginTop: 4, marginBottom: 18, maxWidth: 820, lineHeight: 1.6 }}>{data.summaryShort}</p>
+
+            {/* наценка дизайнера: себестоимость → цена клиента */}
+            <div className="glass" style={{ borderRadius: "var(--r-lg)", padding: "16px 20px", marginBottom: 22, maxWidth: 640 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, fontSize: 14.5 }}>Наценка дизайнера</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--accent)" }}>{markup}%</span>
+              </div>
+              <input type="range" min="0" max="100" step="5" value={markup} onChange={(e) => setMarkup(+e.target.value)} className="quiz-range" style={{ marginTop: 10 }} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13.5, flexWrap: "wrap", gap: 8 }}>
+                <span style={{ color: "var(--muted)" }}>Себестоимость (фабрика): <b style={{ color: "var(--text)" }}>{fmtMoney(grand)}</b></span>
+                <span style={{ color: "var(--muted)" }}>Для клиента: <b style={{ color: "var(--accent-2)" }}>{fmtMoney(client)}</b></span>
+              </div>
+            </div>
+
+            {/* комнаты */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {rooms.map((r) => (
+                <div key={r.name} className="glass" style={{ borderRadius: "var(--r-lg)", padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 800, fontFamily: "var(--font-display)", fontSize: 16.5 }}>{r.name}{r.area ? <span style={{ color: "var(--faint)", fontWeight: 500, fontSize: 13 }}> · {r.area} м²</span> : null}</span>
+                    <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15 }}>{fmtMoney(roomTotal(r))}</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {r.items.map((it, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "7px 0", borderTop: i ? "1px solid var(--hairline)" : "none", fontSize: 13.5 }}>
+                        <span style={{ flex: 1, color: "var(--text)", lineHeight: 1.4 }}>{it.title}</span>
+                        <span style={{ color: "var(--faint)", whiteSpace: "nowrap", fontSize: 12 }}>{it.cat}</span>
+                        <span style={{ color: "var(--muted)", whiteSpace: "nowrap", width: 28, textAlign: "right" }}>×{it.qty || 1}</span>
+                        <span style={{ fontWeight: 700, whiteSpace: "nowrap", width: 96, textAlign: "right" }}>{fmtMoney(it.price * (it.qty || 1))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* итог (sticky) */}
+          <div className="pd-cart">
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <span style={{ width: 40, height: 40, borderRadius: 12, background: "var(--accent)", color: "#1a0d08", display: "grid", placeItems: "center", flex: "none" }}><I.layers size={20} /></span>
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{fmtMoney(grand)}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>{itemsCount} позиций · {over ? <span style={{ color: "var(--accent)" }}>сверх бюджета</span> : <span style={{ color: "var(--accent-2)" }}>в рамках бюджета</span>}</div>
+                </div>
+              </div>
+              <span className="glass" style={{ padding: "7px 12px", borderRadius: 99, fontSize: 12.5, fontWeight: 700, color: "var(--accent-2)" }}>Клиенту (+{markup}%): {fmtMoney(client)}</span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                <button className="btn btn-ghost" style={{ padding: "11px 16px" }} onClick={exportPDF}><I.layers size={16} />Выгрузить PDF</button>
+                <button className="btn btn-primary" style={{ padding: "11px 18px" }}><I.check size={16} />Сохранить смету</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

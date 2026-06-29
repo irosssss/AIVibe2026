@@ -14,6 +14,8 @@
     walkwayMin: 70,      // магистральный проход
     walkwayComfort: 90,  // комфортный проход
     seatToCoffee: { min: 30, max: 45 }, // диван ↔ журнальный стол
+    tvComfort: { min: 150, max: 350 },  // диван ↔ ТВ-зона (комфорт просмотра)
+    doorSwing: 90,       // запас на открывание входной двери
     occupancyWarn: 0.6,  // доля площади под мебелью
   };
   /* что мешает проходу (ковёр — не мешает) */
@@ -85,6 +87,26 @@
     const pc = Math.round(occ * 100);
     if (occ > NORMS.occupancyWarn) findings.push({ kind: "warn", text: `Мебель занимает ${pc}% пола — тесновато, оставьте воздух (норма < ${Math.round(NORMS.occupancyWarn * 100)}%).` });
     else findings.push({ kind: "plus", text: `Мебель занимает ${pc}% пола — комната дышит.` });
+
+    // 4) зона открывания входной двери (если известна позиция двери)
+    if (room.door) {
+      const W = room.w * 100, L = room.l * 100, dW = NORMS.doorSwing, sw = NORMS.doorSwing;
+      const dz = room.door.indexOf("right") >= 0
+        ? { x0: W - dW, x1: W, y0: L - sw, y1: L }
+        : { x0: 0, x1: dW, y0: L - sw, y1: L };
+      const blocked = rects.find((r) => r.x0 < dz.x1 && dz.x0 < r.x1 && r.y0 < dz.y1 && dz.y0 < r.y1);
+      if (blocked) findings.push({ kind: "warn", text: `«${blocked.label}» в зоне открывания двери — дверь упрётся, нужен запас ~${sw} см.` });
+      else findings.push({ kind: "plus", text: `Зона открывания двери свободна (запас ~${sw} см).` });
+    }
+
+    // 5) дистанция «диван ↔ ТВ-зона» (медиа-стена)
+    const media = rects.find((r) => r.k === "media");
+    if (media && seat) {
+      const g = edgeGap(media, seat), T = NORMS.tvComfort;
+      if (g < T.min - 30) findings.push({ kind: "warn", text: `ТВ-зона близко к дивану (${g} см) — глаза устают, комфортно от ${T.min} см.` });
+      else if (g > T.max + 100) findings.push({ kind: "warn", text: `ТВ-зона далеко от дивана (${g} см) — мелко видно, оптимум ${T.min}–${T.max} см.` });
+      else findings.push({ kind: "plus", text: `Диван↔ТВ ${g} см — комфортная дистанция просмотра (${T.min}–${T.max} см).` });
+    }
 
     const warns = findings.filter((f) => f.kind === "warn").length;
     return { findings, ok: warns === 0, warns, passed: findings.length - warns, occupancy: pc };
