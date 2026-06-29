@@ -205,7 +205,9 @@ function RoomSpecOverlay({ data, onClose }) {
   const client = Math.round(grand * (1 + markup / 100));
   const itemsCount = rooms.reduce((s, r) => s + r.items.length, 0);
   const over = grand > data.budget;
-  const exportPDF = () => { if (window.AIVibePDF && AIVibePDF.exportRoomSpec) AIVibePDF.exportRoomSpec({ project: data.name, area: data.area, rooms, grand, markupPct: markup, clientTotal: client, budget: data.budget }); };
+  const specArgs = () => ({ project: data.name, area: data.area, rooms, grand, markupPct: markup, clientTotal: client, budget: data.budget });
+  const exportPDF = () => { if (window.AIVibePDF && AIVibePDF.exportRoomSpec) AIVibePDF.exportRoomSpec(specArgs()); };
+  const exportXLSX = () => { if (window.AIVibeXLSX) AIVibeXLSX.exportRoomSpec(specArgs()); };
 
   return (
     <div className="pd-overlay" role="dialog" aria-label={"Смета: " + data.name}>
@@ -275,6 +277,7 @@ function RoomSpecOverlay({ data, onClose }) {
               </div>
               <span className="glass" style={{ padding: "7px 12px", borderRadius: 99, fontSize: 12.5, fontWeight: 700, color: "var(--accent-2)" }}>Клиенту (+{markup}%): {fmtMoney(client)}</span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                <button className="btn btn-ghost" style={{ padding: "11px 16px" }} onClick={exportXLSX}><I.grid size={16} />Выгрузить Excel</button>
                 <button className="btn btn-ghost" style={{ padding: "11px 16px" }} onClick={exportPDF}><I.layers size={16} />Выгрузить PDF</button>
                 <button className="btn btn-primary" style={{ padding: "11px 18px" }}><I.check size={16} />Сохранить смету</button>
               </div>
