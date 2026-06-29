@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIVibe — дизайн интерьеров с AR и AI</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#0e0a10">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#0e0a10"/>
+    <g fill="none" stroke="#E2552B" stroke-width="10" stroke-linejoin="round">
+      <path d="M600 300 L760 620 H440 Z"/>
+      <path d="M600 300 L680 620 M600 300 L520 620" stroke-opacity="0.45" stroke-width="6"/>
+    </g>
+    <circle cx="600" cy="300" r="26" fill="#E2552B"/>
+    <text x="600" y="710" text-anchor="middle" font-family="Onest, system-ui, sans-serif" font-size="64" font-weight="800" fill="#F4EEE9">AI<tspan fill="#E2552B">Vibe</tspan></text>
+  </svg>
+</template>
+<div id="root"></div>
+
+<!-- React + Babel (pinned) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Mock-слой данных (как будущий API) -->
+<script src="mock.js"></script>
+<script src="project-data.js"></script>
+
+<!-- Движок сметы (эргономика + бюджет) и выгрузка PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
+<script src="engine.js"></script>
+<script src="pdf.js"></script>
+
+<!-- Выгрузка сметы в Excel (SheetJS, client-side) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="xlsx.js"></script>
+
+<!-- UI-примитивы и экраны (порядок важен) -->
+<script type="text/babel" src="components/ui.jsx"></script>
+<script type="text/babel" src="components/site-hero.jsx"></script>
+<script type="text/babel" src="components/site-sections.jsx"></script>
+<script type="text/babel" src="components/site-github.jsx"></script>
+<script type="text/babel" src="components/cabinet.jsx"></script>
+<script type="text/babel" src="components/cabinet-views.jsx"></script>
+<script type="text/babel" src="components/style-quiz.jsx"></script>
+<script type="text/babel" src="components/project-detail.jsx"></script>
+<script type="text/babel" src="components/admin.jsx"></script>
+<script type="text/babel" src="components/admin-views.jsx"></script>
+<script type="text/babel" src="components/app.jsx"></script>
+</body>
+</html>
